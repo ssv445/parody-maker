@@ -160,58 +160,76 @@ async function main() {
         if (verbose) console.log(`Extracted Video ID: ${videoId}`);
 
         // All paths must be under ./media for docker
-        const cachedVideoPath = path.join(cacheDir, `${videoId}.mp4`);
-        const cachedVideoPathContainer = `/workdir/.youtube_cache/${videoId}.mp4`;
+        // Instead of only videoId.mp4, check for any videoId.*.mp4
+        let cachedVideoPath = null;
+        let cachedVideoPathContainer = null;
+        const cacheFiles = await fs.readdir(cacheDir);
+        const cacheMatch = cacheFiles.find(f => f.match(new RegExp(`^${videoId}\\..*\\.mp4$`)));
+        if (cacheMatch) {
+            cachedVideoPath = path.join(cacheDir, cacheMatch);
+            cachedVideoPathContainer = `/workdir/.youtube_cache/${cacheMatch}`;
+        } else {
+            cachedVideoPath = path.join(cacheDir, `${videoId}.mp4`);
+            cachedVideoPathContainer = `/workdir/.youtube_cache/${videoId}.mp4`;
+        }
         let localVideoPath = cachedVideoPath; // Host path
         let containerVideoPath = cachedVideoPathContainer; // Container path
 
         // 4a. Check cache or download
-        if (await fs.pathExists(cachedVideoPath)) {
+        if (cacheMatch && await fs.pathExists(cachedVideoPath)) {
             console.log(`✅ Video ${videoId} found in cache: ${cachedVideoPath}`);
         } else {
             console.log(`ℹ️ Video ${videoId} not in cache. Downloading...`);
             try {
-                // Download ONLY 720p MP4, store as <videoId>.mp4, never use format code in filename
-                const ytdlpCmd = `docker compose exec ytdlp yt-dlp -f "bestvideo[height<=720]+bestaudio/best[height<=720]" --merge-output-format mp4 -o "/workdir/.youtube_cache/${videoId}.mp4" "${task.url}"`;
-                if (verbose) console.log(`yt-dlp command: ${ytdlpCmd}`);
-                await execPromise(ytdlpCmd);
-                console.log(`✅ Downloaded and cached ${videoId} to ${cachedVideoPath}`);
+                // Download best 720p video and best audio as separate files
+                const videoPattern = new RegExp(`^${videoId}\.f.*\.mp4$`);
+                const audioPattern = new RegExp(`^${videoId}\.f.*\.(m4a|webm|mp3|aac)$`);
+                let videoFile = null;
+                let audioFile = null;
+                for (const f of cacheFiles) {
+                    if (videoPattern.test(f)) videoFile = f;
+                    if (audioPattern.test(f)) audioFile = f;
+                }
+                if (!videoFile || !audioFile) {
+                    // Download best 720p video and best audio as separate files
+                    const ytdlpCmd = `docker compose exec ytdlp yt-dlp -f "bestvideo[height=720]+bestaudio" -o "/workdir/.youtube_cache/%(id)s.%(format_id)s.%(ext)s" "${task.url}"`;
+                    if (verbose) console.log(`yt-dlp command: ${ytdlpCmd}`);
+                    await execPromise(ytdlpCmd);
+                    // Refresh file list
+                    const newCacheFiles = await fs.readdir(cacheDir);
+                    for (const f of newCacheFiles) {
+                        if (videoPattern.test(f)) videoFile = f;
+                        if (audioPattern.test(f)) audioFile = f;
+                    }
+                    if (!videoFile || !audioFile) {
+                        console.warn(`Could not find both video and audio files for ${videoId} after download.`);
+                        continue;
+                    }
+                }
+                const videoPathContainer = `/workdir/.youtube_cache/${videoFile}`;
+                const audioPathContainer = `/workdir/.youtube_cache/${audioFile}`;
+                // 4b. Cut (Trim) video+audio together
+                const segmentFileName = `cut_segment_${i + 1}_${videoId}.mp4`;
+                const segmentOutputPath = path.join(tempDir, segmentFileName); // Host path
+                const segmentOutputPathContainer = `/workdir/.temp_segments/${segmentFileName}`;
+                console.log(`Cutting segment for ${videoId}: ${task.startTime} to ${task.endTime}`);
+                try {
+                    // Use ffmpeg to merge and cut video+audio
+                    const ffmpegCmd = `docker compose exec ffmpeg ffmpeg -y -ss ${task.startTime} -i \"${videoPathContainer}\" -ss ${task.startTime} -i \"${audioPathContainer}\" -t ${calculateDuration(task.startTime, task.endTime)} -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac \"${segmentOutputPathContainer}\"`;
+                    if (verbose) console.log(`FFmpeg command: ${ffmpegCmd}`);
+                    await execPromise(ffmpegCmd);
+                    console.log(`✅ Segment (muxed cut) for ${videoId} saved to ${segmentOutputPath}`);
+                    cutSegmentPaths.push(segmentOutputPath);
+                } catch (err) {
+                    console.warn(`Skipping segment for ${videoId} due to cutting error.`);
+                    continue; // Skip to next video if cutting fails
+                }
             } catch (err) {
                 console.error(`❌ Error downloading ${task.url} (ID: ${videoId}): ${err.message}`);
                 if (err.stderr && verbose) console.error(`yt-dlp stderr: ${err.stderr}`);
                 console.warn(`Skipping video ${videoId} due to download error.`);
                 continue; // Skip to next video
             }
-        }
-
-        // 4b. Cut (Trim) video
-        const segmentFileName = `cut_segment_${i + 1}_${videoId}.mp4`;
-        const segmentOutputPath = path.join(tempDir, segmentFileName); // Host path
-        const segmentOutputPathContainer = `/workdir/.temp_segments/${segmentFileName}`;
-        console.log(`Cutting segment for ${videoId}: ${task.startTime} to ${task.endTime}`);
-
-        try {
-            // Try lossless cut first
-            const ffmpegCmd = `docker compose exec ffmpeg ffmpeg -y -ss ${task.startTime} -i \"${containerVideoPath}\" -t ${calculateDuration(task.startTime, task.endTime)} -c copy \"${segmentOutputPathContainer}\"`;
-            if (verbose) console.log(`FFmpeg command: ${ffmpegCmd}`);
-            try {
-                await execPromise(ffmpegCmd);
-                console.log(`✅ Segment (lossless cut) for ${videoId} saved to ${segmentOutputPath}`);
-                cutSegmentPaths.push(segmentOutputPath);
-            } catch (err) {
-                console.warn(`⚠️ Lossless cut failed for ${videoId}. Attempting re-encode...`);
-                if (verbose) console.log(`FFmpeg command: ${ffmpegCmd}`);
-
-                // Fallback: re-encode
-                const ffmpegReencodeCmd = `docker compose exec ffmpeg ffmpeg -y -ss ${task.startTime} -i \"${containerVideoPath}\" -t ${calculateDuration(task.startTime, task.endTime)} \"${segmentOutputPathContainer}\"`;
-                if (verbose) console.log(`FFmpeg (re-encode) command: ${ffmpegReencodeCmd}`);
-                await execPromise(ffmpegReencodeCmd);
-                console.log(`✅ Segment (re-encoded) for ${videoId} saved to ${segmentOutputPath}`);
-                cutSegmentPaths.push(segmentOutputPath);
-            }
-        } catch (err) {
-            console.warn(`Skipping segment for ${videoId} due to cutting error.`);
-            continue; // Skip to next video if cutting fails
         }
     }
 
