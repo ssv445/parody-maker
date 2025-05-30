@@ -30,7 +30,7 @@ function execPromise(command) {
     return new Promise((resolve, reject) => {
         exec(command, (error, stdout, stderr) => {
             if (error) {
-                reject(error);
+                reject({ error, stdout, stderr });
                 return;
             }
             resolve({ stdout, stderr });
@@ -52,7 +52,7 @@ async function checkToolExists(toolName, versionCommand) {
     } catch (error) {
         console.error(`❌ ${toolName} not found or not executable. Please ensure it's installed and in your PATH.`);
         console.error(`   Attempted command: ${versionCommand}`);
-        console.error(`   Error: ${error.message}`);
+        console.error(`   Error: ${error.error ? error.error.message : error.message}`);
         return false;
     }
 }
@@ -115,12 +115,10 @@ async function main() {
     }
     console.log("All critical dependencies found.\n");
 
-
     // 2. Ensure directories exist
     try {
         await fs.ensureDir(cacheDir);
         await fs.ensureDir(tempDir);
-        // Clear tempDir from previous runs if it exists, but not cacheDir
         await fs.emptyDir(tempDir);
         if (verbose) {
             console.log(`Cache directory: ${path.resolve(cacheDir)}`);
@@ -145,113 +143,79 @@ async function main() {
         process.exit(1);
     }
 
-    const cutSegmentPaths = [];
-
-    // 4. Process each video
-    for (let i = 0; i < videoTasks.length; i++) {
-        const task = videoTasks[i];
-        console.log(`\nProcessing video ${i + 1}/${videoTasks.length}: ${task.url}`);
-
+    // 4. Download 360p mp4 with audio (format 18)
+    for (const task of videoTasks) {
         const videoId = getYouTubeId(task.url);
         if (!videoId) {
             console.warn(`⚠️ Could not extract video ID from URL: ${task.url}. Skipping this video.`);
             continue;
         }
-        if (verbose) console.log(`Extracted Video ID: ${videoId}`);
-
-        // All paths must be under ./media for docker
-        // Instead of only videoId.mp4, check for any videoId.*.mp4
-        let cachedVideoPath = null;
-        let cachedVideoPathContainer = null;
-        const cacheFiles = await fs.readdir(cacheDir);
-        const cacheMatch = cacheFiles.find(f => f.match(new RegExp(`^${videoId}\\..*\\.mp4$`)));
-        if (cacheMatch) {
-            cachedVideoPath = path.join(cacheDir, cacheMatch);
-            cachedVideoPathContainer = `/workdir/.youtube_cache/${cacheMatch}`;
-        } else {
-            cachedVideoPath = path.join(cacheDir, `${videoId}.mp4`);
-            cachedVideoPathContainer = `/workdir/.youtube_cache/${videoId}.mp4`;
+        // Download 360p mp4 with audio (format 18)
+        const videoFileName = `${videoId}.360p.mp4`;
+        const videoFilePath = path.join(cacheDir, videoFileName);
+        const videoFilePathContainer = `/workdir/.youtube_cache/${videoFileName}`;
+        const videoExists = await fs.pathExists(videoFilePath);
+        if (videoExists) {
+            if (verbose) console.log(`360p mp4 for ${videoId} already in cache.`);
+            continue;
         }
-        let localVideoPath = cachedVideoPath; // Host path
-        let containerVideoPath = cachedVideoPathContainer; // Container path
-
-        // 4a. Check cache or download
-        if (cacheMatch && await fs.pathExists(cachedVideoPath)) {
-            console.log(`✅ Video ${videoId} found in cache: ${cachedVideoPath}`);
-        } else {
-            console.log(`ℹ️ Video ${videoId} not in cache. Downloading...`);
-            try {
-                // Download best 720p video and best audio as separate files
-                const videoPattern = new RegExp(`^${videoId}\.f.*\.mp4$`);
-                const audioPattern = new RegExp(`^${videoId}\.f.*\.(m4a|webm|mp3|aac)$`);
-                let videoFile = null;
-                let audioFile = null;
-                for (const f of cacheFiles) {
-                    if (videoPattern.test(f)) videoFile = f;
-                    if (audioPattern.test(f)) audioFile = f;
-                }
-                if (!videoFile || !audioFile) {
-                    // Download best 720p video and best audio as separate files
-                    const ytdlpCmd = `docker compose exec ytdlp yt-dlp -f "bestvideo[height=720]+bestaudio" -o "/workdir/.youtube_cache/%(id)s.%(format_id)s.%(ext)s" "${task.url}"`;
-                    if (verbose) console.log(`yt-dlp command: ${ytdlpCmd}`);
-                    await execPromise(ytdlpCmd);
-                    // Refresh file list
-                    const newCacheFiles = await fs.readdir(cacheDir);
-                    for (const f of newCacheFiles) {
-                        if (videoPattern.test(f)) videoFile = f;
-                        if (audioPattern.test(f)) audioFile = f;
-                    }
-                    if (!videoFile || !audioFile) {
-                        console.warn(`Could not find both video and audio files for ${videoId} after download.`);
-                        continue;
-                    }
-                }
-                const videoPathContainer = `/workdir/.youtube_cache/${videoFile}`;
-                const audioPathContainer = `/workdir/.youtube_cache/${audioFile}`;
-                // 4b. Cut (Trim) video+audio together
-                const segmentFileName = `cut_segment_${i + 1}_${videoId}.mp4`;
-                const segmentOutputPath = path.join(tempDir, segmentFileName); // Host path
-                const segmentOutputPathContainer = `/workdir/.temp_segments/${segmentFileName}`;
-                console.log(`Cutting segment for ${videoId}: ${task.startTime} to ${task.endTime}`);
-                try {
-                    // Use ffmpeg to merge and cut video+audio
-                    const ffmpegCmd = `docker compose exec ffmpeg ffmpeg -y -ss ${task.startTime} -i \"${videoPathContainer}\" -ss ${task.startTime} -i \"${audioPathContainer}\" -t ${calculateDuration(task.startTime, task.endTime)} -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac \"${segmentOutputPathContainer}\"`;
-                    if (verbose) console.log(`FFmpeg command: ${ffmpegCmd}`);
-                    await execPromise(ffmpegCmd);
-                    console.log(`✅ Segment (muxed cut) for ${videoId} saved to ${segmentOutputPath}`);
-                    cutSegmentPaths.push(segmentOutputPath);
-                } catch (err) {
-                    console.warn(`Skipping segment for ${videoId} due to cutting error.`);
-                    continue; // Skip to next video if cutting fails
-                }
-            } catch (err) {
-                console.error(`❌ Error downloading ${task.url} (ID: ${videoId}): ${err.message}`);
-                if (err.stderr && verbose) console.error(`yt-dlp stderr: ${err.stderr}`);
-                console.warn(`Skipping video ${videoId} due to download error.`);
-                continue; // Skip to next video
-            }
+        const ytdlpCmd = `docker compose exec ytdlp yt-dlp -f 18 --output "/workdir/.youtube_cache/${videoFileName}" "${task.url}"`;
+        if (verbose) console.log(`yt-dlp command: ${ytdlpCmd}`);
+        try {
+            await execPromise(ytdlpCmd);
+            console.log(`✅ Downloaded 360p mp4 for ${task.url}`);
+        } catch (err) {
+            console.error(`❌ Failed to download ${task.url}: ${err.stderr || err.error.message}`);
+            continue;
         }
     }
 
-    // 5. Join Segments
+    // 5. Cut segments
+    const cutSegmentPaths = [];
+    for (let i = 0; i < videoTasks.length; i++) {
+        const task = videoTasks[i];
+        const videoId = getYouTubeId(task.url);
+        if (!videoId) continue;
+        const videoFileName = `${videoId}.360p.mp4`;
+        const videoFilePath = path.join(cacheDir, videoFileName);
+        const videoFilePathContainer = `/workdir/.youtube_cache/${videoFileName}`;
+        if (!await fs.pathExists(videoFilePath)) {
+            console.warn(`Could not find 360p mp4 for ${videoId}. Skipping.`);
+            continue;
+        }
+        const segmentFileName = `cut_segment_${i + 1}_${videoId}.mp4`;
+        const segmentOutputPath = path.join(tempDir, segmentFileName);
+        const segmentOutputPathContainer = `/workdir/.temp_segments/${segmentFileName}`;
+        const duration = calculateDuration(task.startTime, task.endTime);
+        // Cut segment
+        const ffmpegCmd = `docker compose exec ffmpeg ffmpeg -y -ss ${task.startTime} -i "${videoFilePathContainer}" -t ${duration} -c copy "${segmentOutputPathContainer}"`;
+        if (verbose) console.log(`FFmpeg command: ${ffmpegCmd}`);
+        try {
+            await execPromise(ffmpegCmd);
+            console.log(`✅ Segment for ${videoId} saved to ${segmentOutputPath}`);
+            cutSegmentPaths.push(segmentOutputPath);
+        } catch (err) {
+            console.warn(`Skipping segment for ${videoId} due to cutting error.`);
+            if (verbose) console.error(err.stderr || err.error.message);
+            continue;
+        }
+    }
+
+    // 6. Join Segments
     if (cutSegmentPaths.length === 0) {
         console.warn("⚠️ No segments were successfully cut. Nothing to join. Exiting.");
-        if (!verbose) await fs.remove(tempDir); // Clean up temp even if exiting early
+        if (!verbose) await fs.remove(tempDir);
         process.exit(0);
     }
-
     console.log(`\nJoining ${cutSegmentPaths.length} segments...`);
-
-    // 5a. Create concat list file for ffmpeg concat demuxer
     const concatListPath = path.join(tempDir, 'concat_list.txt');
     const concatListPathContainer = '/workdir/.temp_segments/concat_list.txt';
     const concatListContent = cutSegmentPaths.map(p => `file '${path.basename(p)}'`).join('\n');
     await fs.writeFile(concatListPath, concatListContent);
 
-    // 5b. Merge using ffmpeg concat demuxer
     const outputContainerPath = `/workdir/${path.basename(output)}`;
     try {
-        const mergeCmd = `docker compose exec ffmpeg ffmpeg -y -f concat -safe 0 -i \"${concatListPathContainer}\" -c copy \"${outputContainerPath}\"`;
+        const mergeCmd = `docker compose exec ffmpeg ffmpeg -y -f concat -safe 0 -i "${concatListPathContainer}" -c:v copy -c:a aac "${outputContainerPath}"`;
         if (verbose) console.log(`FFmpeg merge command: ${mergeCmd}`);
         await execPromise(mergeCmd);
         // Move output from ./media to user-specified output if needed
@@ -263,13 +227,14 @@ async function main() {
         console.log(`✅ All segments successfully merged into ${output}`);
     } catch (err) {
         console.error("❌ Failed to join videos.");
+        if (verbose) console.error(err.stderr || err.error.message);
     }
 
-    // 6. Cleanup
-    if (!verbose) { // Keep temp files if verbose for debugging
+    // 7. Cleanup
+    if (!verbose) {
         try {
             console.log(`Cleaning up temporary directory: ${tempDir}`);
-            await fs.remove(tempDir); // Removes the directory and its contents
+            await fs.remove(tempDir);
             console.log("✅ Temporary files cleaned up.");
         } catch (err) {
             console.warn(`⚠️ Error cleaning up temporary directory ${tempDir}: ${err.message}`);
