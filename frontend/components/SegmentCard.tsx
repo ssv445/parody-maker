@@ -157,13 +157,13 @@ export default function SegmentCard({
             : hasErrors
             ? "border-red-300"
             : "border-gray-200"
-        } p-3 cursor-pointer hover:shadow-sm min-w-[280px]`}
+        } p-3 cursor-pointer hover:shadow-sm min-w-[380px]`}
         onClick={onClick}
       >
         {/* Header Row */}
         <div className="flex items-start gap-2 mb-3">
           {/* Arrow Buttons */}
-          <div className="flex flex-col gap-0 flex-shrink-0">
+          <div className="flex gap-0 flex-shrink-0">
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -171,9 +171,9 @@ export default function SegmentCard({
               }}
               disabled={isFirst}
               className="w-6 h-6 flex items-center justify-center hover:bg-gray-100 rounded disabled:opacity-30 disabled:cursor-not-allowed text-gray-600"
-              title="Move up"
+              title="Move left"
             >
-              ↑
+              &lt;
             </button>
             <button
               onClick={(e) => {
@@ -182,9 +182,9 @@ export default function SegmentCard({
               }}
               disabled={isLast}
               className="w-6 h-6 flex items-center justify-center hover:bg-gray-100 rounded disabled:opacity-30 disabled:cursor-not-allowed text-gray-600"
-              title="Move down"
+              title="Move right"
             >
-              ↓
+              &gt;
             </button>
           </div>
 
@@ -226,11 +226,11 @@ export default function SegmentCard({
           </button>
         </div>
 
-        {/* Time Controls */}
-        <div className="space-y-2">
-          {/* Start Time Row */}
+        {/* Time Controls - Horizontal Layout */}
+        <div className="flex items-center justify-between gap-2">
+          {/* Start Time - Left Side */}
           <div className="flex items-center gap-1">
-            <span className="text-sm" title="Start time">⏮</span>
+            <span className="text-xs text-blue-500 font-medium" title="Start time">Start</span>
             <input
               type="text"
               value={localStartTime}
@@ -239,26 +239,26 @@ export default function SegmentCard({
               placeholder="00:00:00"
               className="w-16 px-1 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400"
             />
-            <div className="flex flex-col">
+            <div className="flex flex-col gap-0">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   incrementTime('start');
                 }}
-                className="w-5 h-3 text-xs bg-gray-100 hover:bg-gray-200 rounded-t flex items-center justify-center"
+                className="w-5 h-4 text-[10px] bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-t flex items-center justify-center leading-none"
                 title="+1s"
               >
-                ▲
+                +
               </button>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   decrementTime('start');
                 }}
-                className="w-5 h-3 text-xs bg-gray-100 hover:bg-gray-200 rounded-b flex items-center justify-center"
+                className="w-5 h-4 text-[10px] bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-b flex items-center justify-center leading-none"
                 title="-1s"
               >
-                ▼
+                -
               </button>
             </div>
 
@@ -269,10 +269,10 @@ export default function SegmentCard({
                   e.stopPropagation();
                   setShowStartDropdown(!showStartDropdown);
                 }}
-                className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
-                title="Extend start"
+                className="px-2 py-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 rounded font-medium"
+                title="Extend start backwards"
               >
-                ⏪
+                -
               </button>
               {showStartDropdown && (
                 <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded shadow-lg z-10 min-w-[80px]">
@@ -317,40 +317,8 @@ export default function SegmentCard({
             </div>
           </div>
 
-          {/* End Time Row */}
+          {/* End Time - Right Side */}
           <div className="flex items-center gap-1">
-            <span className="text-sm" title="End time">⏭</span>
-            <input
-              type="text"
-              value={localEndTime}
-              onChange={(e) => handleEndTimeChange(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              placeholder="00:01:00"
-              className="w-16 px-1 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-            <div className="flex flex-col">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  incrementTime('end');
-                }}
-                className="w-5 h-3 text-xs bg-gray-100 hover:bg-gray-200 rounded-t flex items-center justify-center"
-                title="+1s"
-              >
-                ▲
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  decrementTime('end');
-                }}
-                className="w-5 h-3 text-xs bg-gray-100 hover:bg-gray-200 rounded-b flex items-center justify-center"
-                title="-1s"
-              >
-                ▼
-              </button>
-            </div>
-
             {/* End Extend Dropdown */}
             <div className="relative" ref={endDropdownRef}>
               <button
@@ -358,13 +326,13 @@ export default function SegmentCard({
                   e.stopPropagation();
                   setShowEndDropdown(!showEndDropdown);
                 }}
-                className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
-                title="Extend end"
+                className="px-2 py-1 text-xs bg-purple-50 hover:bg-purple-100 text-purple-600 rounded font-medium"
+                title="Extend end forward"
               >
-                ⏩
+                +
               </button>
               {showEndDropdown && (
-                <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded shadow-lg z-10 min-w-[80px]">
+                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded shadow-lg z-10 min-w-[80px]">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -404,6 +372,39 @@ export default function SegmentCard({
                 </div>
               )}
             </div>
+
+            <div className="flex flex-col gap-0">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  incrementTime('end');
+                }}
+                className="w-5 h-4 text-[10px] bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-t flex items-center justify-center leading-none"
+                title="+1s"
+              >
+                +
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  decrementTime('end');
+                }}
+                className="w-5 h-4 text-[10px] bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-b flex items-center justify-center leading-none"
+                title="-1s"
+              >
+                -
+              </button>
+            </div>
+
+            <input
+              type="text"
+              value={localEndTime}
+              onChange={(e) => handleEndTimeChange(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              placeholder="00:01:00"
+              className="w-16 px-1 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400"
+            />
+            <span className="text-xs text-purple-500 font-medium" title="End time">End</span>
           </div>
         </div>
 

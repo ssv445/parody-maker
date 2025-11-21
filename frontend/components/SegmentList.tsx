@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Segment } from "@/lib/types";
 import { getYouTubeId, getYouTubeThumbnail, isValidYouTubeUrl, fetchYouTubeTitle } from "@/lib/youtube";
 import { validateSegment } from "@/lib/validation";
@@ -26,6 +26,8 @@ export default function SegmentList({
   const [urlInput, setUrlInput] = useState("");
   const [urlError, setUrlError] = useState("");
   const [isLoadingTitle, setIsLoadingTitle] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const segmentRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const handleAddVideo = async () => {
     setUrlError("");
@@ -104,6 +106,28 @@ export default function SegmentList({
     }
   };
 
+  // Auto-scroll active segment to center
+  useEffect(() => {
+    if (horizontal && scrollContainerRef.current && segmentRefs.current[currentSegmentIndex]) {
+      const container = scrollContainerRef.current;
+      const activeCard = segmentRefs.current[currentSegmentIndex];
+
+      if (activeCard) {
+        const containerWidth = container.offsetWidth;
+        const cardLeft = activeCard.offsetLeft;
+        const cardWidth = activeCard.offsetWidth;
+
+        // Calculate scroll position to center the card
+        const scrollPosition = cardLeft - (containerWidth / 2) + (cardWidth / 2);
+
+        container.scrollTo({
+          left: scrollPosition,
+          behavior: 'smooth'
+        });
+      }
+    }
+  }, [currentSegmentIndex, horizontal, segments.length]);
+
   const totalDuration = segments.reduce((acc, segment) => {
     try {
       const start = segment.startTime.split(":").reduce((a, b) => a * 60 + parseInt(b), 0);
@@ -140,22 +164,29 @@ export default function SegmentList({
               <p className="text-sm">No segments yet. Add a YouTube video below!</p>
             </div>
           ) : (
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+            <div
+              ref={scrollContainerRef}
+              className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin"
+            >
               {segments.map((segment, index) => (
-                <SegmentCard
+                <div
                   key={segment.id}
-                  segment={segment}
-                  index={index}
-                  isActive={currentSegmentIndex === index}
-                  isFirst={index === 0}
-                  isLast={index === segments.length - 1}
-                  onUpdate={(updated) => handleUpdateSegment(index, updated)}
-                  onDelete={() => handleDeleteSegment(index)}
-                  onClick={() => onSegmentClick(index)}
-                  onMoveUp={() => handleMoveUp(index)}
-                  onMoveDown={() => handleMoveDown(index)}
-                  onPreview={onPreview}
-                />
+                  ref={(el) => (segmentRefs.current[index] = el)}
+                >
+                  <SegmentCard
+                    segment={segment}
+                    index={index}
+                    isActive={currentSegmentIndex === index}
+                    isFirst={index === 0}
+                    isLast={index === segments.length - 1}
+                    onUpdate={(updated) => handleUpdateSegment(index, updated)}
+                    onDelete={() => handleDeleteSegment(index)}
+                    onClick={() => onSegmentClick(index)}
+                    onMoveUp={() => handleMoveUp(index)}
+                    onMoveDown={() => handleMoveDown(index)}
+                    onPreview={onPreview}
+                  />
+                </div>
               ))}
             </div>
           )}
