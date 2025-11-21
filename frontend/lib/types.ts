@@ -1,5 +1,6 @@
 export interface Segment {
   id: string;
+  songTitle: string; // YouTube video title (auto-fetched)
   url: string;
   videoId: string;
   startTime: string; // HH:MM:SS format

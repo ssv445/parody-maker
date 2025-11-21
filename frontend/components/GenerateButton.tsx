@@ -8,6 +8,7 @@ interface GenerateButtonProps {
   isValid: boolean;
   validationErrors: string[];
   projectName: string;
+  compact?: boolean;
 }
 
 export default function GenerateButton({
@@ -15,6 +16,7 @@ export default function GenerateButton({
   isValid,
   validationErrors,
   projectName,
+  compact = false,
 }: GenerateButtonProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState("");
@@ -88,6 +90,81 @@ export default function GenerateButton({
     const secs = seconds % 60;
     return `${mins}m ${secs}s`;
   };
+
+  if (compact) {
+    return (
+      <>
+        <button
+          onClick={handleGenerate}
+          disabled={!isValid || isGenerating || segments.length === 0}
+          className={`px-6 py-2 text-sm font-medium rounded-lg transition-all ${
+            isValid && !isGenerating
+              ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
+              : "bg-gray-300 text-gray-500 cursor-not-allowed"
+          }`}
+          title={!isValid ? validationErrors.join(', ') : 'Generate & Download'}
+        >
+          {isGenerating ? (
+            <span className="flex items-center gap-2">
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  fill="none"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              Generating...
+            </span>
+          ) : (
+            "🎵 Download"
+          )}
+        </button>
+
+        {/* Progress Modal */}
+        {isGenerating && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+              <div className="text-center">
+                <svg
+                  className="animate-spin h-12 w-12 mx-auto mb-4 text-blue-600"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                    fill="none"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+                <h3 className="text-xl font-semibold mb-2">Generating Your Parody Audio</h3>
+                <p className="text-gray-600 mb-4">{progress}</p>
+                <div className="text-sm text-gray-500">
+                  This may take a few minutes depending on the number of segments...
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-6">

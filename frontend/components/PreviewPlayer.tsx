@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Segment } from "@/lib/types";
 import { timeToSeconds } from "@/lib/youtube";
 import VideoPlayer from "./VideoPlayer";
@@ -19,15 +19,16 @@ export default function PreviewPlayer({
   onSegmentVerified,
 }: PreviewPlayerProps) {
   const [autoplayNext, setAutoplayNext] = useState(false);
+  const [previewVideoId, setPreviewVideoId] = useState<string | null>(null);
+  const [previewStart, setPreviewStart] = useState<number>(0);
+  const [previewEnd, setPreviewEnd] = useState<number>(0);
 
   const currentSegment = segments[currentSegmentIndex];
 
   const handleSegmentEnded = () => {
     if (currentSegmentIndex < segments.length - 1) {
-      // Advance to next segment
       onSegmentChange(currentSegmentIndex + 1);
     } else {
-      // Last segment
       setAutoplayNext(false);
     }
   };
@@ -37,6 +38,23 @@ export default function PreviewPlayer({
     onSegmentChange(0);
     setAutoplayNext(true);
   };
+
+  // Handle preview from SegmentCard
+  const handlePreview = (videoId: string, start: number, end: number) => {
+    setPreviewVideoId(videoId);
+    setPreviewStart(start);
+    setPreviewEnd(end);
+    setAutoplayNext(false);
+  };
+
+  // Expose preview handler to parent
+  useEffect(() => {
+    // Store in a ref that can be accessed by parent
+    (window as any).__previewHandler = handlePreview;
+    return () => {
+      delete (window as any).__previewHandler;
+    };
+  }, []);
 
   if (segments.length === 0) {
     return (
@@ -67,18 +85,33 @@ export default function PreviewPlayer({
     );
   }
 
+  // Determine what to play: preview or current segment
+  const videoId = previewVideoId || currentSegment.videoId;
+  const startTime = previewVideoId ? previewStart : timeToSeconds(currentSegment.startTime);
+  const endTime = previewVideoId ? previewEnd : timeToSeconds(currentSegment.endTime);
+
   return (
     <div>
       {/* Video Player */}
       <div className="mb-4">
         <VideoPlayer
-          key={`${currentSegment.videoId}-${currentSegmentIndex}`}
-          videoId={currentSegment.videoId}
-          startTime={timeToSeconds(currentSegment.startTime)}
-          endTime={timeToSeconds(currentSegment.endTime)}
-          onReady={() => onSegmentVerified(currentSegmentIndex)}
-          onEnded={handleSegmentEnded}
-          autoplay={autoplayNext}
+          videoId={videoId}
+          startTime={startTime}
+          endTime={endTime}
+          onReady={() => {
+            if (!previewVideoId) {
+              onSegmentVerified(currentSegmentIndex);
+            }
+          }}
+          onEnded={() => {
+            if (previewVideoId) {
+              // Preview ended, clear preview state
+              setPreviewVideoId(null);
+            } else {
+              handleSegmentEnded();
+            }
+          }}
+          autoplay={autoplayNext || !!previewVideoId}
         />
       </div>
 
@@ -86,13 +119,24 @@ export default function PreviewPlayer({
       <div className="space-y-4">
         {/* Current Segment Info */}
         <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-          <div>
+          <div className="flex-1">
             <div className="text-sm font-medium text-gray-900">
-              Segment {currentSegmentIndex + 1} of {segments.length}
+              {previewVideoId ? (
+                <span className="text-blue-600">⏯ Previewing changes...</span>
+              ) : (
+                currentSegment?.songTitle || `Segment ${currentSegmentIndex + 1}`
+              )}
             </div>
             <div className="text-xs text-gray-500 mt-1">
-              {currentSegment?.startTime} - {currentSegment?.endTime}
+              {previewVideoId ? (
+                `${Math.floor(previewStart)}s - ${Math.floor(previewEnd)}s`
+              ) : (
+                `${currentSegment?.startTime} - ${currentSegment?.endTime}`
+              )}
             </div>
+          </div>
+          <div className="text-xs text-gray-500">
+            {currentSegmentIndex + 1} / {segments.length}
           </div>
         </div>
 
@@ -105,19 +149,22 @@ export default function PreviewPlayer({
         </button>
 
         {/* Segment Navigation */}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <button
-            onClick={() => onSegmentChange(Math.max(0, currentSegmentIndex - 1))}
+            onClick={() => {
+              setPreviewVideoId(null);
+              onSegmentChange(Math.max(0, currentSegmentIndex - 1));
+            }}
             disabled={currentSegmentIndex === 0}
             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             ← Previous
           </button>
-          <div className="flex items-center justify-center text-sm font-medium text-gray-700">
-            {currentSegmentIndex + 1} / {segments.length}
-          </div>
           <button
-            onClick={() => onSegmentChange(Math.min(segments.length - 1, currentSegmentIndex + 1))}
+            onClick={() => {
+              setPreviewVideoId(null);
+              onSegmentChange(Math.min(segments.length - 1, currentSegmentIndex + 1));
+            }}
             disabled={currentSegmentIndex === segments.length - 1}
             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >

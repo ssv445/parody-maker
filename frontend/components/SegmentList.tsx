@@ -1,25 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { Segment } from "@/lib/types";
-import { getYouTubeId, getYouTubeThumbnail, isValidYouTubeUrl } from "@/lib/youtube";
+import { getYouTubeId, getYouTubeThumbnail, isValidYouTubeUrl, fetchYouTubeTitle } from "@/lib/youtube";
 import { validateSegment } from "@/lib/validation";
 import SegmentCard from "./SegmentCard";
 
@@ -28,54 +11,8 @@ interface SegmentListProps {
   onSegmentsChange: (segments: Segment[]) => void;
   currentSegmentIndex: number;
   onSegmentClick: (index: number) => void;
-}
-
-function SortableSegmentCard({
-  segment,
-  index,
-  isActive,
-  onUpdate,
-  onDelete,
-  onClick,
-  onSetTime,
-}: {
-  segment: Segment;
-  index: number;
-  isActive: boolean;
-  onUpdate: (segment: Segment) => void;
-  onDelete: () => void;
-  onClick: () => void;
-  onSetTime: (type: "start" | "end", time: string) => void;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: segment.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <div ref={setNodeRef} style={style}>
-      <SegmentCard
-        segment={segment}
-        index={index}
-        isActive={isActive}
-        onUpdate={onUpdate}
-        onDelete={onDelete}
-        onClick={onClick}
-        onSetTime={onSetTime}
-        dragHandleProps={{ ...attributes, ...listeners }}
-      />
-    </div>
-  );
+  onPreview?: (videoId: string, start: number, end: number) => void;
+  horizontal?: boolean;
 }
 
 export default function SegmentList({
@@ -83,29 +20,14 @@ export default function SegmentList({
   onSegmentsChange,
   currentSegmentIndex,
   onSegmentClick,
+  onPreview,
+  horizontal = false,
 }: SegmentListProps) {
   const [urlInput, setUrlInput] = useState("");
   const [urlError, setUrlError] = useState("");
+  const [isLoadingTitle, setIsLoadingTitle] = useState(false);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (over && active.id !== over.id) {
-      const oldIndex = segments.findIndex((s) => s.id === active.id);
-      const newIndex = segments.findIndex((s) => s.id === over.id);
-
-      onSegmentsChange(arrayMove(segments, oldIndex, newIndex));
-    }
-  };
-
-  const handleAddVideo = () => {
+  const handleAddVideo = async () => {
     setUrlError("");
 
     if (!urlInput.trim()) {
@@ -124,8 +46,16 @@ export default function SegmentList({
       return;
     }
 
+    setIsLoadingTitle(true);
+
+    // Fetch YouTube title
+    const songTitle = await fetchYouTubeTitle(videoId);
+
+    setIsLoadingTitle(false);
+
     const newSegment: Segment = {
       id: crypto.randomUUID(),
+      songTitle,
       url: urlInput,
       videoId,
       startTime: "00:00:00",
@@ -154,6 +84,20 @@ export default function SegmentList({
     onSegmentsChange(newSegments);
   };
 
+  const handleMoveUp = (index: number) => {
+    if (index === 0) return;
+    const newSegments = [...segments];
+    [newSegments[index - 1], newSegments[index]] = [newSegments[index], newSegments[index - 1]];
+    onSegmentsChange(newSegments);
+  };
+
+  const handleMoveDown = (index: number) => {
+    if (index === segments.length - 1) return;
+    const newSegments = [...segments];
+    [newSegments[index], newSegments[index + 1]] = [newSegments[index + 1], newSegments[index]];
+    onSegmentsChange(newSegments);
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       handleAddVideo();
@@ -176,6 +120,78 @@ export default function SegmentList({
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
+  if (horizontal) {
+    return (
+      <div className="flex flex-col h-full">
+        {/* Horizontal Segment Row */}
+        <div className="flex-shrink-0 mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <h2 className="text-lg font-semibold text-gray-900">Segments</h2>
+            <span className="text-sm text-gray-500">
+              {segments.length}/10 · {formatDuration(totalDuration)}
+              {totalDuration > 1200 && (
+                <span className="text-red-600 ml-2">(exceeds 20 min)</span>
+              )}
+            </span>
+          </div>
+
+          {segments.length === 0 ? (
+            <div className="text-center py-8 text-gray-500 bg-white rounded-lg border-2 border-dashed border-gray-300">
+              <p className="text-sm">No segments yet. Add a YouTube video below!</p>
+            </div>
+          ) : (
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+              {segments.map((segment, index) => (
+                <SegmentCard
+                  key={segment.id}
+                  segment={segment}
+                  index={index}
+                  isActive={currentSegmentIndex === index}
+                  isFirst={index === 0}
+                  isLast={index === segments.length - 1}
+                  onUpdate={(updated) => handleUpdateSegment(index, updated)}
+                  onDelete={() => handleDeleteSegment(index)}
+                  onClick={() => onSegmentClick(index)}
+                  onMoveUp={() => handleMoveUp(index)}
+                  onMoveDown={() => handleMoveDown(index)}
+                  onPreview={onPreview}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Add Video Input - Below Segments */}
+        <div className="flex-shrink-0 bg-white rounded-lg border border-gray-300 p-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Add YouTube Video
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="https://www.youtube.com/watch?v=..."
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={handleAddVideo}
+              disabled={isLoadingTitle}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoadingTitle ? "Loading..." : "Add"}
+            </button>
+          </div>
+          {urlError && (
+            <p className="mt-2 text-sm text-red-600">{urlError}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Vertical layout (original)
   return (
     <div className="bg-white rounded-lg shadow-sm p-6">
       <h2 className="text-xl font-semibold mb-4">Video Segments</h2>
@@ -196,9 +212,10 @@ export default function SegmentList({
           />
           <button
             onClick={handleAddVideo}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            disabled={isLoadingTitle}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Add
+            {isLoadingTitle ? "Loading..." : "Add"}
           </button>
         </div>
         {urlError && (
@@ -242,35 +259,22 @@ export default function SegmentList({
             <p className="text-sm">No segments yet. Add a YouTube video to get started!</p>
           </div>
         ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={segments.map((s) => s.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              {segments.map((segment, index) => (
-                <SortableSegmentCard
-                  key={segment.id}
-                  segment={segment}
-                  index={index}
-                  isActive={currentSegmentIndex === index}
-                  onUpdate={(updated) => handleUpdateSegment(index, updated)}
-                  onDelete={() => handleDeleteSegment(index)}
-                  onClick={() => onSegmentClick(index)}
-                  onSetTime={(type, time) => {
-                    const updated = {
-                      ...segment,
-                      [type === "start" ? "startTime" : "endTime"]: time,
-                    };
-                    handleUpdateSegment(index, updated);
-                  }}
-                />
-              ))}
-            </SortableContext>
-          </DndContext>
+          segments.map((segment, index) => (
+            <SegmentCard
+              key={segment.id}
+              segment={segment}
+              index={index}
+              isActive={currentSegmentIndex === index}
+              isFirst={index === 0}
+              isLast={index === segments.length - 1}
+              onUpdate={(updated) => handleUpdateSegment(index, updated)}
+              onDelete={() => handleDeleteSegment(index)}
+              onClick={() => onSegmentClick(index)}
+              onMoveUp={() => handleMoveUp(index)}
+              onMoveDown={() => handleMoveDown(index)}
+              onPreview={onPreview}
+            />
+          ))
         )}
       </div>
     </div>

@@ -1,6 +1,28 @@
-import { Project } from "./types";
+import { Project, Segment } from "./types";
 
 const PROJECTS_KEY = "parody_projects";
+
+/**
+ * Migrates old segments to include songTitle field
+ */
+function migrateSegment(segment: any, index: number): Segment {
+  return {
+    ...segment,
+    songTitle: segment.songTitle || `Segment ${index + 1}`,
+  };
+}
+
+/**
+ * Migrates projects to support new schema
+ */
+function migrateProjects(projects: any[]): Project[] {
+  return projects.map((project) => ({
+    ...project,
+    segments: project.segments.map((seg: any, idx: number) =>
+      migrateSegment(seg, idx)
+    ),
+  }));
+}
 
 export function loadProjects(): Project[] {
   if (typeof window === "undefined") return [];
@@ -8,7 +30,9 @@ export function loadProjects(): Project[] {
   try {
     const stored = localStorage.getItem(PROJECTS_KEY);
     if (!stored) return [];
-    return JSON.parse(stored);
+
+    const projects = JSON.parse(stored);
+    return migrateProjects(projects);
   } catch (error) {
     console.error("Error loading projects:", error);
     return [];

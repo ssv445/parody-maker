@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // Declare YouTube IFrame Player API types
 declare global {
@@ -30,12 +30,14 @@ export default function VideoPlayer({
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const iframeIdRef = useRef<string>(`youtube-player-${videoId}-${Date.now()}`);
-  const isInitializingRef = useRef<boolean>(false);
+  const iframeIdRef = useRef<string>(`youtube-player-${Date.now()}`);
+  const [isReady, setIsReady] = useState(false);
 
-  // Store callbacks in refs to avoid re-initializing player when they change
+  // Store refs for callbacks to avoid reinitializing
   const onReadyRef = useRef(onReady);
   const onEndedRef = useRef(onEnded);
+  const previousVideoIdRef = useRef<string>(videoId);
+  const previousStartTimeRef = useRef<number>(startTime);
 
   // Keep refs updated
   useEffect(() => {
@@ -43,8 +45,8 @@ export default function VideoPlayer({
     onEndedRef.current = onEnded;
   }, [onReady, onEnded]);
 
+  // Initialize player ONCE
   useEffect(() => {
-    // Load YouTube IFrame API
     const loadYouTubeAPI = () => {
       return new Promise<void>((resolve) => {
         if (window.YT && window.YT.Player) {
@@ -52,7 +54,6 @@ export default function VideoPlayer({
           return;
         }
 
-        // Check if script already exists
         if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
           const tag = document.createElement('script');
           tag.src = 'https://www.youtube.com/iframe_api';
@@ -60,7 +61,6 @@ export default function VideoPlayer({
           firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
         }
 
-        // Wait for API to load
         const checkAPI = () => {
           if (window.YT && window.YT.Player) {
             resolve();
@@ -75,25 +75,16 @@ export default function VideoPlayer({
     let isMounted = true;
 
     const initPlayer = async () => {
-      // Prevent double initialization in StrictMode
-      if (isInitializingRef.current) return;
       if (playerRef.current) return;
 
       const container = containerRef.current;
       if (!container) return;
 
-      isInitializingRef.current = true;
-
       try {
         await loadYouTubeAPI();
 
-        // Check if component was unmounted during async operation
-        if (!isMounted || !containerRef.current) {
-          isInitializingRef.current = false;
-          return;
-        }
+        if (!isMounted || !containerRef.current) return;
 
-        // Create a placeholder div for YouTube to replace
         const playerId = iframeIdRef.current;
         const placeholder = document.createElement('div');
         placeholder.id = playerId;
@@ -116,6 +107,7 @@ export default function VideoPlayer({
               console.log('[VideoPlayer] Player ready');
               if (!isMounted) return;
 
+              setIsReady(true);
               event.target.seekTo(startTime, true);
               if (onReadyRef.current) onReadyRef.current();
 
@@ -158,9 +150,11 @@ export default function VideoPlayer({
             },
           },
         });
+
+        previousVideoIdRef.current = videoId;
+        previousStartTimeRef.current = startTime;
       } catch (error) {
         console.error('[VideoPlayer] Error initializing player:', error);
-        isInitializingRef.current = false;
       }
     };
 
@@ -169,16 +163,13 @@ export default function VideoPlayer({
     return () => {
       isMounted = false;
 
-      // Clear interval
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
 
-      // Safely destroy player
       if (playerRef.current) {
         try {
-          // Check if destroy method exists and player is valid
           if (typeof playerRef.current.destroy === 'function') {
             playerRef.current.destroy();
           }
@@ -188,15 +179,51 @@ export default function VideoPlayer({
         playerRef.current = null;
       }
 
-      // Reset initialization flag
-      isInitializingRef.current = false;
-
-      // Clean up container innerHTML as fallback
       if (containerRef.current) {
         containerRef.current.innerHTML = '';
       }
     };
-  }, [videoId, startTime, endTime, autoplay]);
+  }, []); // ONLY INIT ONCE!
+
+  // Handle videoId changes WITHOUT remounting
+  useEffect(() => {
+    if (!isReady || !playerRef.current) return;
+
+    if (videoId !== previousVideoIdRef.current) {
+      console.log('[VideoPlayer] Loading new video:', videoId);
+      playerRef.current.loadVideoById({
+        videoId: videoId,
+        startSeconds: startTime,
+      });
+      previousVideoIdRef.current = videoId;
+      previousStartTimeRef.current = startTime;
+    }
+  }, [videoId, startTime, isReady]);
+
+  // Handle time changes WITHOUT remounting
+  useEffect(() => {
+    if (!isReady || !playerRef.current) return;
+
+    // Check if we need to seek
+    if (videoId === previousVideoIdRef.current) {
+      const timeDiff = Math.abs(startTime - previousStartTimeRef.current);
+
+      if (timeDiff > 0.5) {
+        console.log('[VideoPlayer] Seeking to:', startTime);
+        try {
+          const currentTime = playerRef.current.getCurrentTime();
+
+          // Only seek if we're not already near the target time
+          if (Math.abs(currentTime - startTime) > 1) {
+            playerRef.current.seekTo(startTime, true);
+            previousStartTimeRef.current = startTime;
+          }
+        } catch (error) {
+          console.error('[VideoPlayer] Error seeking:', error);
+        }
+      }
+    }
+  }, [startTime, endTime, videoId, isReady]);
 
   return (
     <div

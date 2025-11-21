@@ -24,24 +24,20 @@ export default function Home() {
     if (loadedProjects.length > 0) {
       setShowContinuePrompt(true);
     } else {
-      // Create first project
       const newProject = createNewProject();
       setProjects([newProject]);
       setCurrentProjectId(newProject.id);
     }
   }, []);
 
-  // Get current project
   const currentProject = projects.find(p => p.id === currentProjectId);
 
-  // Update segments when project changes
   useEffect(() => {
     if (currentProject) {
       setSegments(currentProject.segments);
     }
-  }, [currentProjectId]); // Only depend on project ID, not the whole project object
+  }, [currentProjectId]);
 
-  // Auto-save when segments change
   useEffect(() => {
     if (currentProjectId && segments.length >= 0) {
       const updatedProjects = projects.map(p =>
@@ -52,7 +48,7 @@ export default function Home() {
       setProjects(updatedProjects);
       saveProjects(updatedProjects);
     }
-  }, [segments]); // Only depend on segments, not projects or currentProjectId
+  }, [segments]);
 
   const handleProjectChange = (projectId: string) => {
     setCurrentProjectId(projectId);
@@ -153,63 +149,65 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">
-            Parody Song Generator
-          </h1>
-          <ProjectSelector
-            projects={projects}
-            currentProjectId={currentProjectId}
-            onProjectChange={handleProjectChange}
-            onProjectCreate={handleProjectCreate}
-            onProjectRename={handleProjectRename}
-            onProjectDelete={handleProjectDelete}
-            onProjectDuplicate={handleProjectDuplicate}
-          />
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* Left Panel - Segment List (40%) */}
-          <div className="lg:col-span-2">
-            <SegmentList
-              segments={segments}
-              onSegmentsChange={setSegments}
-              currentSegmentIndex={currentSegmentIndex}
-              onSegmentClick={setCurrentSegmentIndex}
+        <div className="max-w-[1600px] mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <h1 className="text-2xl font-bold text-gray-900">
+              Parody Song Generator
+            </h1>
+            <ProjectSelector
+              projects={projects}
+              currentProjectId={currentProjectId}
+              onProjectChange={handleProjectChange}
+              onProjectCreate={handleProjectCreate}
+              onProjectRename={handleProjectRename}
+              onProjectDelete={handleProjectDelete}
+              onProjectDuplicate={handleProjectDuplicate}
             />
           </div>
 
-          {/* Right Panel - Preview Player (60%) */}
-          <div className="lg:col-span-3">
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-xl font-semibold mb-4">Preview</h2>
-              <PreviewPlayer
-                segments={segments}
-                currentSegmentIndex={currentSegmentIndex}
-                onSegmentChange={setCurrentSegmentIndex}
-                onSegmentVerified={(index) => {
-                  const updatedSegments = [...segments];
-                  updatedSegments[index].verified = true;
-                  setSegments(updatedSegments);
-                }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Generate Button */}
-        <div className="mt-6">
+          {/* Download Button - Top Right */}
           <GenerateButton
             segments={segments}
             isValid={isValid}
             validationErrors={validationResult.errors}
             projectName={currentProject?.name || "Untitled"}
+            compact
+          />
+        </div>
+      </header>
+
+      {/* Main Content - Centered Preview */}
+      <main className="flex-1 flex flex-col max-w-[1600px] mx-auto w-full px-4 py-6">
+        {/* Preview Player - Center */}
+        <div className="flex-shrink-0 mb-6">
+          <PreviewPlayer
+            segments={segments}
+            currentSegmentIndex={currentSegmentIndex}
+            onSegmentChange={setCurrentSegmentIndex}
+            onSegmentVerified={(index) => {
+              const updatedSegments = [...segments];
+              updatedSegments[index].verified = true;
+              setSegments(updatedSegments);
+            }}
+          />
+        </div>
+
+        {/* Horizontal Segment List */}
+        <div className="flex-1 min-h-0">
+          <SegmentList
+            segments={segments}
+            onSegmentsChange={setSegments}
+            currentSegmentIndex={currentSegmentIndex}
+            onSegmentClick={setCurrentSegmentIndex}
+            onPreview={(videoId, start, end) => {
+              if ((window as any).__previewHandler) {
+                (window as any).__previewHandler(videoId, start, end);
+              }
+            }}
+            horizontal
           />
         </div>
       </main>

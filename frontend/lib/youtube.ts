@@ -59,3 +59,25 @@ export function isValidTimeFormat(timeStr: string): boolean {
   const timeRegex = /^(\d{1,2}:)?(\d{1,2}:)?\d{1,2}$/;
   return timeRegex.test(timeStr);
 }
+
+/**
+ * Fetches YouTube video title using oEmbed API.
+ * No API key required!
+ */
+export async function fetchYouTubeTitle(videoId: string): Promise<string> {
+  try {
+    const response = await fetch(
+      `https://www.youtube.com/oembed?url=https://youtube.com/watch?v=${videoId}&format=json`
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.title || `Video ${videoId}`;
+  } catch (error) {
+    console.error('Failed to fetch YouTube title:', error);
+    return `Video ${videoId}`;
+  }
+}
