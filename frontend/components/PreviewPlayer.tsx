@@ -1,15 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Segment } from "@/lib/types";
 import { timeToSeconds } from "@/lib/youtube";
-import videojs from "video.js";
-import "video.js/dist/video-js.css";
-
-// Import YouTube tech
-if (typeof window !== "undefined") {
-  require("videojs-youtube");
-}
+import VideoPlayer from "./VideoPlayer";
 
 interface PreviewPlayerProps {
   segments: Segment[];
@@ -24,197 +18,25 @@ export default function PreviewPlayer({
   onSegmentChange,
   onSegmentVerified,
 }: PreviewPlayerProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const playerRef = useRef<any>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [autoplayNext, setAutoplayNext] = useState(false);
 
   const currentSegment = segments[currentSegmentIndex];
 
-  // Initialize Video.js player
-  useEffect(() => {
-    if (!videoRef.current) return;
-
-    // Only initialize once
-    if (!playerRef.current) {
-      const player = videojs(videoRef.current, {
-        techOrder: ["youtube"],
-        sources: [],
-        controls: true,
-        fluid: false,
-        aspectRatio: "16:9",
-        youtube: {
-          ytControls: 0,
-          modestbranding: 1,
-          rel: 0,
-          showinfo: 0,
-        },
-      });
-
-      playerRef.current = player;
-
-      // Set up event listeners
-      player.on("play", () => {
-        console.log("Video playing");
-        setIsPlaying(true);
-        startTimeTracking();
-      });
-
-      player.on("pause", () => {
-        console.log("Video paused");
-        setIsPlaying(false);
-        stopTimeTracking();
-      });
-
-      player.on("ended", () => {
-        console.log("Video ended");
-        setIsPlaying(false);
-        stopTimeTracking();
-        handleSegmentEnd();
-      });
-
-      player.on("loadedmetadata", () => {
-        console.log("Video loaded");
-        if (currentSegment) {
-          onSegmentVerified(currentSegmentIndex);
-        }
-      });
-
-      player.on("error", (e: any) => {
-        console.error("Video.js error:", e);
-      });
-    }
-
-    return () => {
-      if (playerRef.current && !playerRef.current.isDisposed()) {
-        stopTimeTracking();
-      }
-    };
-  }, []);
-
-  // Load segment when it changes
-  useEffect(() => {
-    if (!playerRef.current || !currentSegment) return;
-
-    const player = playerRef.current;
-    const startTime = timeToSeconds(currentSegment.startTime);
-    const endTime = timeToSeconds(currentSegment.endTime);
-
-    console.log(`Loading segment ${currentSegmentIndex + 1}:`, {
-      videoId: currentSegment.videoId,
-      startTime,
-      endTime,
-    });
-
-    // Set source
-    player.src({
-      type: "video/youtube",
-      src: `https://www.youtube.com/watch?v=${currentSegment.videoId}&start=${startTime}&end=${endTime}`,
-    });
-
-    // Seek to start time after loading
-    const onLoadedData = () => {
-      player.currentTime(startTime);
-      player.off("loadeddata", onLoadedData);
-
-      // Auto-play if we were already playing
-      if (isPlaying) {
-        setTimeout(() => {
-          player.play().catch((e: any) => {
-            console.log("Auto-play prevented:", e);
-          });
-        }, 500);
-      }
-    };
-
-    player.one("loadeddata", onLoadedData);
-  }, [currentSegmentIndex, currentSegment?.videoId]);
-
-  const startTimeTracking = () => {
-    if (checkIntervalRef.current) return;
-    if (!currentSegment) return;
-
-    const endTime = timeToSeconds(currentSegment.endTime);
-
-    checkIntervalRef.current = setInterval(() => {
-      if (!playerRef.current) return;
-
-      const currentTime = playerRef.current.currentTime();
-      setCurrentTime(currentTime);
-
-      // Check if we've reached the end time
-      if (currentTime >= endTime - 0.1) {
-        // 0.1s buffer
-        console.log("Reached end time, advancing to next segment");
-        stopTimeTracking();
-        handleSegmentEnd();
-      }
-    }, 100);
-  };
-
-  const stopTimeTracking = () => {
-    if (checkIntervalRef.current) {
-      clearInterval(checkIntervalRef.current);
-      checkIntervalRef.current = null;
-    }
-  };
-
-  const handleSegmentEnd = () => {
+  const handleSegmentEnded = () => {
     if (currentSegmentIndex < segments.length - 1) {
       // Advance to next segment
       onSegmentChange(currentSegmentIndex + 1);
     } else {
-      // Last segment, stop playing
-      setIsPlaying(false);
-      if (playerRef.current) {
-        playerRef.current.pause();
-      }
-    }
-  };
-
-  const handlePlayPause = () => {
-    if (!playerRef.current) return;
-
-    if (isPlaying) {
-      playerRef.current.pause();
-    } else {
-      playerRef.current.play().catch((e: any) => {
-        console.log("Play prevented:", e);
-      });
+      // Last segment
+      setAutoplayNext(false);
     }
   };
 
   const handlePlayAll = () => {
     if (segments.length === 0) return;
-
     onSegmentChange(0);
-    setIsPlaying(true);
-    setTimeout(() => {
-      if (playerRef.current) {
-        playerRef.current.play().catch((e: any) => {
-          console.log("Play all prevented:", e);
-        });
-      }
-    }, 1000);
+    setAutoplayNext(true);
   };
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
-
-  // Cleanup
-  useEffect(() => {
-    return () => {
-      stopTimeTracking();
-      if (playerRef.current && !playerRef.current.isDisposed()) {
-        playerRef.current.dispose();
-        playerRef.current = null;
-      }
-    };
-  }, []);
 
   if (segments.length === 0) {
     return (
@@ -247,12 +69,16 @@ export default function PreviewPlayer({
 
   return (
     <div>
-      {/* Video.js Player */}
-      <div className="bg-black rounded-lg overflow-hidden mb-4">
-        <video
-          ref={videoRef}
-          className="video-js vjs-big-play-centered"
-          style={{ width: "100%", height: "400px" }}
+      {/* Video Player */}
+      <div className="mb-4">
+        <VideoPlayer
+          key={`${currentSegment.videoId}-${currentSegmentIndex}`}
+          videoId={currentSegment.videoId}
+          startTime={timeToSeconds(currentSegment.startTime)}
+          endTime={timeToSeconds(currentSegment.endTime)}
+          onReady={() => onSegmentVerified(currentSegmentIndex)}
+          onEnded={handleSegmentEnded}
+          autoplay={autoplayNext}
         />
       </div>
 
@@ -267,34 +93,7 @@ export default function PreviewPlayer({
             <div className="text-xs text-gray-500 mt-1">
               {currentSegment?.startTime} - {currentSegment?.endTime}
             </div>
-            {currentTime > 0 && (
-              <div className="text-xs text-blue-600 mt-1">
-                Current: {formatTime(currentTime)}
-              </div>
-            )}
           </div>
-          <button
-            onClick={handlePlayPause}
-            className="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
-          >
-            {isPlaying ? (
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            ) : (
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            )}
-          </button>
         </div>
 
         {/* Play All Button */}
