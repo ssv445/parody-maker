@@ -176,11 +176,6 @@ export default function Home() {
             segments={segments}
             currentSegmentIndex={currentSegmentIndex}
             onSegmentChange={setCurrentSegmentIndex}
-            onSegmentVerified={(index) => {
-              const updatedSegments = [...segments];
-              updatedSegments[index].verified = true;
-              setSegments(updatedSegments);
-            }}
             downloadButton={
               <GenerateButton
                 segments={segments}

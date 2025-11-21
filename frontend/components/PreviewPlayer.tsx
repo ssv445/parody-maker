@@ -9,7 +9,6 @@ interface PreviewPlayerProps {
   segments: Segment[];
   currentSegmentIndex: number;
   onSegmentChange: (index: number) => void;
-  onSegmentVerified: (index: number) => void;
   downloadButton?: React.ReactNode;
 }
 
@@ -17,7 +16,6 @@ export default function PreviewPlayer({
   segments,
   currentSegmentIndex,
   onSegmentChange,
-  onSegmentVerified,
   downloadButton,
 }: PreviewPlayerProps) {
   const [autoplayNext, setAutoplayNext] = useState(false);
@@ -101,9 +99,7 @@ export default function PreviewPlayer({
           startTime={startTime}
           endTime={endTime}
           onReady={() => {
-            if (!previewVideoId) {
-              onSegmentVerified(currentSegmentIndex);
-            }
+            // No verification needed - segments are verified on add
           }}
           onEnded={() => {
             if (previewVideoId) {

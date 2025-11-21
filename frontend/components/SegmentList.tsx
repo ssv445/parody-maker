@@ -63,7 +63,7 @@ export default function SegmentList({
       startTime: "00:00:00",
       endTime: "00:01:00",
       thumbnail: getYouTubeThumbnail(videoId),
-      verified: false,
+      verified: true, // Auto-verify on add since we successfully fetched the title
       validationErrors: [],
     };
 

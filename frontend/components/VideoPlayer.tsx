@@ -104,7 +104,6 @@ export default function VideoPlayer({
           },
           events: {
             onReady: (event: any) => {
-              console.log('[VideoPlayer] Player ready');
               if (!isMounted) return;
 
               setIsReady(true);
