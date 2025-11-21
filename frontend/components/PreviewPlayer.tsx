@@ -37,7 +37,7 @@ export default function PreviewPlayer({
   // Load YouTube IFrame API
   useEffect(() => {
     if (window.YT) {
-      initPlayer();
+      setIsReady(true);
       return;
     }
 
@@ -47,38 +47,62 @@ export default function PreviewPlayer({
     firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
 
     window.onYouTubeIframeAPIReady = () => {
-      initPlayer();
+      setIsReady(true);
     };
   }, []);
 
+  // Initialize player when API is ready and we have segments
+  useEffect(() => {
+    if (isReady && currentSegment) {
+      initPlayer();
+    }
+  }, [isReady, currentSegmentIndex, segments.length]);
+
   const initPlayer = () => {
+    if (!window.YT || !window.YT.Player) return;
     if (!containerRef.current || !currentSegment) return;
 
-    if (playerRef.current) {
-      playerRef.current.destroy();
+    // Destroy existing player
+    if (playerRef.current && typeof playerRef.current.destroy === 'function') {
+      try {
+        playerRef.current.destroy();
+      } catch (e) {
+        console.log('Error destroying player:', e);
+      }
     }
 
-    playerRef.current = new window.YT.Player("youtube-player", {
-      height: "100%",
-      width: "100%",
-      videoId: currentSegment.videoId,
-      playerVars: {
-        start: timeToSeconds(currentSegment.startTime),
-        end: timeToSeconds(currentSegment.endTime),
-        autoplay: 0,
-        controls: 1,
-        modestbranding: 1,
-        rel: 0,
-      },
-      events: {
-        onReady: onPlayerReady,
-        onStateChange: onPlayerStateChange,
-      },
-    });
+    // Clear the container
+    const container = document.getElementById("youtube-player");
+    if (container) {
+      container.innerHTML = '';
+    }
+
+    // Create new player
+    try {
+      playerRef.current = new window.YT.Player("youtube-player", {
+        height: "100%",
+        width: "100%",
+        videoId: currentSegment.videoId,
+        playerVars: {
+          start: timeToSeconds(currentSegment.startTime),
+          end: timeToSeconds(currentSegment.endTime),
+          autoplay: 0,
+          controls: 1,
+          modestbranding: 1,
+          rel: 0,
+        },
+        events: {
+          onReady: onPlayerReady,
+          onStateChange: onPlayerStateChange,
+        },
+      });
+    } catch (e) {
+      console.error('Error creating YouTube player:', e);
+    }
   };
 
   const onPlayerReady = () => {
-    setIsReady(true);
+    console.log('YouTube player ready');
     // Mark segment as verified once loaded
     if (currentSegment) {
       onSegmentVerified(currentSegmentIndex);
@@ -137,24 +161,7 @@ export default function PreviewPlayer({
     }
   };
 
-  // Reload player when segment changes
-  useEffect(() => {
-    if (isReady && currentSegment) {
-      if (playerRef.current && playerRef.current.loadVideoById) {
-        const startTime = timeToSeconds(currentSegment.startTime);
-        const endTime = timeToSeconds(currentSegment.endTime);
-
-        playerRef.current.loadVideoById({
-          videoId: currentSegment.videoId,
-          startSeconds: startTime,
-          endSeconds: endTime,
-        });
-
-        // Mark as verified
-        onSegmentVerified(currentSegmentIndex);
-      }
-    }
-  }, [currentSegmentIndex, currentSegment]);
+  // Note: Segment changes are now handled by the initPlayer useEffect above
 
   // Cleanup
   useEffect(() => {
