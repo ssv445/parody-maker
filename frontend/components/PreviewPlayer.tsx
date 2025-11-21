@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Segment } from "@/lib/types";
 import { timeToSeconds } from "@/lib/youtube";
 import VideoPlayer from "./VideoPlayer";
@@ -10,6 +10,7 @@ interface PreviewPlayerProps {
   currentSegmentIndex: number;
   onSegmentChange: (index: number) => void;
   onSegmentVerified: (index: number) => void;
+  downloadButton?: React.ReactNode;
 }
 
 export default function PreviewPlayer({
@@ -17,6 +18,7 @@ export default function PreviewPlayer({
   currentSegmentIndex,
   onSegmentChange,
   onSegmentVerified,
+  downloadButton,
 }: PreviewPlayerProps) {
   const [autoplayNext, setAutoplayNext] = useState(false);
   const [previewVideoId, setPreviewVideoId] = useState<string | null>(null);
@@ -117,59 +119,19 @@ export default function PreviewPlayer({
 
       {/* Controls */}
       <div className="space-y-4">
-        {/* Current Segment Info */}
-        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-          <div className="flex-1">
-            <div className="text-sm font-medium text-gray-900">
-              {previewVideoId ? (
-                <span className="text-blue-600">⏯ Previewing changes...</span>
-              ) : (
-                currentSegment?.songTitle || `Segment ${currentSegmentIndex + 1}`
-              )}
-            </div>
-            <div className="text-xs text-gray-500 mt-1">
-              {previewVideoId ? (
-                `${Math.floor(previewStart)}s - ${Math.floor(previewEnd)}s`
-              ) : (
-                `${currentSegment?.startTime} - ${currentSegment?.endTime}`
-              )}
-            </div>
-          </div>
-          <div className="text-xs text-gray-500">
-            {currentSegmentIndex + 1} / {segments.length}
-          </div>
-        </div>
-
-        {/* Play All Button */}
-        <button
-          onClick={handlePlayAll}
-          className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-        >
-          ▶ Play All Segments
-        </button>
-
-        {/* Segment Navigation */}
-        <div className="grid grid-cols-2 gap-2">
+        {/* Play All Button & Download */}
+        <div className="flex gap-2">
           <button
-            onClick={() => {
-              setPreviewVideoId(null);
-              onSegmentChange(Math.max(0, currentSegmentIndex - 1));
-            }}
-            disabled={currentSegmentIndex === 0}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            onClick={handlePlayAll}
+            className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
           >
-            ← Previous
+            ▶ Play All Segments
           </button>
-          <button
-            onClick={() => {
-              setPreviewVideoId(null);
-              onSegmentChange(Math.min(segments.length - 1, currentSegmentIndex + 1));
-            }}
-            disabled={currentSegmentIndex === segments.length - 1}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            Next →
-          </button>
+          {downloadButton && (
+            <div className="flex-shrink-0">
+              {downloadButton}
+            </div>
+          )}
         </div>
       </div>
     </div>

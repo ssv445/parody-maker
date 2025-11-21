@@ -97,7 +97,7 @@ export default function GenerateButton({
         <button
           onClick={handleGenerate}
           disabled={!isValid || isGenerating || segments.length === 0}
-          className={`px-6 py-2 text-sm font-medium rounded-lg transition-all ${
+          className={`px-6 py-3 text-sm font-medium rounded-lg transition-all ${
             isValid && !isGenerating
               ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
               : "bg-gray-300 text-gray-500 cursor-not-allowed"

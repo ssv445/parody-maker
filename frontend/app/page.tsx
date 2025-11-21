@@ -152,29 +152,18 @@ export default function Home() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
-        <div className="max-w-[1600px] mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold text-gray-900">
-              Parody Song Generator
-            </h1>
-            <ProjectSelector
-              projects={projects}
-              currentProjectId={currentProjectId}
-              onProjectChange={handleProjectChange}
-              onProjectCreate={handleProjectCreate}
-              onProjectRename={handleProjectRename}
-              onProjectDelete={handleProjectDelete}
-              onProjectDuplicate={handleProjectDuplicate}
-            />
-          </div>
-
-          {/* Download Button - Top Right */}
-          <GenerateButton
-            segments={segments}
-            isValid={isValid}
-            validationErrors={validationResult.errors}
-            projectName={currentProject?.name || "Untitled"}
-            compact
+        <div className="max-w-[1600px] mx-auto px-4 py-4 flex items-center gap-4">
+          <h1 className="text-2xl font-bold text-gray-900">
+            Parody Song Generator
+          </h1>
+          <ProjectSelector
+            projects={projects}
+            currentProjectId={currentProjectId}
+            onProjectChange={handleProjectChange}
+            onProjectCreate={handleProjectCreate}
+            onProjectRename={handleProjectRename}
+            onProjectDelete={handleProjectDelete}
+            onProjectDuplicate={handleProjectDuplicate}
           />
         </div>
       </header>
@@ -192,6 +181,15 @@ export default function Home() {
               updatedSegments[index].verified = true;
               setSegments(updatedSegments);
             }}
+            downloadButton={
+              <GenerateButton
+                segments={segments}
+                isValid={isValid}
+                validationErrors={validationResult.errors}
+                projectName={currentProject?.name || "Untitled"}
+                compact
+              />
+            }
           />
         </div>
 

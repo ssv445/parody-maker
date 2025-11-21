@@ -149,14 +149,33 @@ export default function SegmentList({
       <div className="flex flex-col h-full">
         {/* Horizontal Segment Row */}
         <div className="flex-shrink-0 mb-4">
-          <div className="flex items-center gap-2 mb-2">
-            <h2 className="text-lg font-semibold text-gray-900">Segments</h2>
-            <span className="text-sm text-gray-500">
-              {segments.length}/10 · {formatDuration(totalDuration)}
-              {totalDuration > 1200 && (
-                <span className="text-red-600 ml-2">(exceeds 20 min)</span>
-              )}
-            </span>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-gray-900">Segments</h2>
+              <span className="text-sm text-gray-500">
+                {segments.length}/10 · {formatDuration(totalDuration)}
+                {totalDuration > 1200 && (
+                  <span className="text-red-600 ml-2">(exceeds 20 min)</span>
+                )}
+              </span>
+            </div>
+            {/* Segment Navigation Buttons */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => onSegmentClick(Math.max(0, currentSegmentIndex - 1))}
+                disabled={currentSegmentIndex === 0}
+                className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                ← Previous
+              </button>
+              <button
+                onClick={() => onSegmentClick(Math.min(segments.length - 1, currentSegmentIndex + 1))}
+                disabled={currentSegmentIndex === segments.length - 1}
+                className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Next →
+              </button>
+            </div>
           </div>
 
           {segments.length === 0 ? (

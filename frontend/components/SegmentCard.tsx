@@ -35,31 +35,12 @@ export default function SegmentCard({
   const [localEndTime, setLocalEndTime] = useState(segment.endTime);
   const [songTitle, setSongTitle] = useState(segment.songTitle);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showStartDropdown, setShowStartDropdown] = useState(false);
-  const [showEndDropdown, setShowEndDropdown] = useState(false);
-  const startDropdownRef = useRef<HTMLDivElement>(null);
-  const endDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setLocalStartTime(segment.startTime);
     setLocalEndTime(segment.endTime);
     setSongTitle(segment.songTitle);
   }, [segment]);
-
-  // Close dropdowns on outside click
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (startDropdownRef.current && !startDropdownRef.current.contains(event.target as Node)) {
-        setShowStartDropdown(false);
-      }
-      if (endDropdownRef.current && !endDropdownRef.current.contains(event.target as Node)) {
-        setShowEndDropdown(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   // Debounced update with smart preview
   const handleStartTimeChange = (value: string) => {
@@ -71,7 +52,8 @@ export default function SegmentCard({
 
       if (onPreview) {
         const startSeconds = timeToSeconds(value);
-        onPreview(segment.videoId, startSeconds, startSeconds + 5);
+        // Play from the new start time
+        onPreview(segment.videoId, startSeconds, startSeconds + 10);
       }
     }, 500);
   };
@@ -86,6 +68,7 @@ export default function SegmentCard({
       if (onPreview) {
         const endSeconds = timeToSeconds(value);
         const previewStart = Math.max(0, endSeconds - 5);
+        // Play 5 seconds before the end time
         onPreview(segment.videoId, previewStart, endSeconds);
       }
     }, 500);
@@ -109,13 +92,9 @@ export default function SegmentCard({
       onUpdate(newSegment);
 
       if (onPreview) {
-        if (delta < 0) {
-          onPreview(segment.videoId, newSeconds, currentSeconds);
-        } else {
-          onPreview(segment.videoId, currentSeconds, newSeconds);
-        }
+        // Play from the new start time
+        onPreview(segment.videoId, newSeconds, newSeconds + 10);
       }
-      setShowStartDropdown(false);
     } else {
       const currentSeconds = timeToSeconds(localEndTime);
       const newSeconds = currentSeconds + delta;
@@ -126,13 +105,10 @@ export default function SegmentCard({
       onUpdate(newSegment);
 
       if (onPreview) {
-        if (delta < 0) {
-          onPreview(segment.videoId, newSeconds, currentSeconds);
-        } else {
-          onPreview(segment.videoId, currentSeconds, newSeconds);
-        }
+        // Play 5 seconds before the end time
+        const previewStart = Math.max(0, newSeconds - 5);
+        onPreview(segment.videoId, previewStart, newSeconds);
       }
-      setShowEndDropdown(false);
     }
   };
 
@@ -162,31 +138,18 @@ export default function SegmentCard({
       >
         {/* Header Row */}
         <div className="flex items-start gap-2 mb-3">
-          {/* Arrow Buttons */}
-          <div className="flex gap-0 flex-shrink-0">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onMoveUp?.();
-              }}
-              disabled={isFirst}
-              className="w-6 h-6 flex items-center justify-center hover:bg-gray-100 rounded disabled:opacity-30 disabled:cursor-not-allowed text-gray-600"
-              title="Move left"
-            >
-              &lt;
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onMoveDown?.();
-              }}
-              disabled={isLast}
-              className="w-6 h-6 flex items-center justify-center hover:bg-gray-100 rounded disabled:opacity-30 disabled:cursor-not-allowed text-gray-600"
-              title="Move right"
-            >
-              &gt;
-            </button>
-          </div>
+          {/* Left Arrow Button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveUp?.();
+            }}
+            disabled={isFirst}
+            className="flex-shrink-0 w-6 h-6 flex items-center justify-center hover:bg-gray-100 rounded disabled:opacity-30 disabled:cursor-not-allowed text-gray-600"
+            title="Move left"
+          >
+            &lt;
+          </button>
 
           {/* Thumbnail & Title Column */}
           <div className="flex-1 min-w-0">
@@ -223,6 +186,19 @@ export default function SegmentCard({
             title="Delete segment"
           >
             ×
+          </button>
+
+          {/* Right Arrow Button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveDown?.();
+            }}
+            disabled={isLast}
+            className="flex-shrink-0 w-6 h-6 flex items-center justify-center hover:bg-gray-100 rounded disabled:opacity-30 disabled:cursor-not-allowed text-gray-600"
+            title="Move right"
+          >
+            &gt;
           </button>
         </div>
 
@@ -261,118 +237,10 @@ export default function SegmentCard({
                 -
               </button>
             </div>
-
-            {/* Start Extend Dropdown */}
-            <div className="relative" ref={startDropdownRef}>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowStartDropdown(!showStartDropdown);
-                }}
-                className="px-2 py-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 rounded font-medium"
-                title="Extend start backwards"
-              >
-                -
-              </button>
-              {showStartDropdown && (
-                <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded shadow-lg z-10 min-w-[80px]">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      adjustTime('start', -5);
-                    }}
-                    className="block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100"
-                  >
-                    -5s
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      adjustTime('start', -10);
-                    }}
-                    className="block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100"
-                  >
-                    -10s
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      adjustTime('start', -15);
-                    }}
-                    className="block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100"
-                  >
-                    -15s
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      adjustTime('start', -30);
-                    }}
-                    className="block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100"
-                  >
-                    -30s
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
 
           {/* End Time - Right Side */}
           <div className="flex items-center gap-1">
-            {/* End Extend Dropdown */}
-            <div className="relative" ref={endDropdownRef}>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowEndDropdown(!showEndDropdown);
-                }}
-                className="px-2 py-1 text-xs bg-purple-50 hover:bg-purple-100 text-purple-600 rounded font-medium"
-                title="Extend end forward"
-              >
-                +
-              </button>
-              {showEndDropdown && (
-                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded shadow-lg z-10 min-w-[80px]">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      adjustTime('end', 5);
-                    }}
-                    className="block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100"
-                  >
-                    +5s
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      adjustTime('end', 10);
-                    }}
-                    className="block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100"
-                  >
-                    +10s
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      adjustTime('end', 15);
-                    }}
-                    className="block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100"
-                  >
-                    +15s
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      adjustTime('end', 30);
-                    }}
-                    className="block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100"
-                  >
-                    +30s
-                  </button>
-                </div>
-              )}
-            </div>
-
             <div className="flex flex-col gap-0">
               <button
                 onClick={(e) => {
