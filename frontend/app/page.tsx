@@ -129,6 +129,93 @@ export default function Home() {
     }
   };
 
+  const handleExportSegments = () => {
+    if (!currentProject || segments.length === 0) {
+      alert("No segments to export!");
+      return;
+    }
+
+    const exportData = segments.map(s => ({
+      url: s.url,
+      startTime: s.startTime,
+      endTime: s.endTime,
+    }));
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${currentProject.name.replace(/[^a-z0-9]/gi, "_")}_segments.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportSegments = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const importedData = JSON.parse(content);
+
+        if (!Array.isArray(importedData)) {
+          alert("Invalid JSON format. Expected an array of segments.");
+          return;
+        }
+
+        // Validate the structure
+        const isValid = importedData.every(item =>
+          item.url && item.startTime && item.endTime
+        );
+
+        if (!isValid) {
+          alert("Invalid segment format. Each segment must have url, startTime, and endTime.");
+          return;
+        }
+
+        // Convert to full segments
+        const { getYouTubeId, getYouTubeThumbnail } = require("@/lib/youtube");
+        const { fetchYouTubeTitle } = require("@/lib/youtube");
+
+        const newSegments: Segment[] = importedData.map((item: any) => {
+          const videoId = getYouTubeId(item.url) || "";
+          return {
+            id: crypto.randomUUID(),
+            songTitle: `Video ${videoId}`,
+            url: item.url,
+            videoId,
+            startTime: item.startTime,
+            endTime: item.endTime,
+            thumbnail: getYouTubeThumbnail(videoId),
+            verified: true,
+            validationErrors: [],
+          };
+        });
+
+        // Fetch titles asynchronously
+        newSegments.forEach(async (segment) => {
+          const title = await fetchYouTubeTitle(segment.videoId);
+          segment.songTitle = title;
+          setSegments([...newSegments]);
+        });
+
+        setSegments(newSegments);
+        alert(`Imported ${newSegments.length} segments successfully!`);
+      } catch (error) {
+        alert("Failed to parse JSON file. Please check the file format.");
+        console.error("Import error:", error);
+      }
+    };
+    reader.readAsText(file);
+
+    // Reset input value
+    event.target.value = "";
+  };
+
   const validationResult = validateAllSegments(segments);
   const isValid = validationResult.isValid;
 
@@ -137,9 +224,30 @@ export default function Home() {
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-[1600px] mx-auto px-3 sm:px-4 py-3 sm:py-4">
-          <h1 className="text-lg sm:text-2xl font-bold text-gray-900">
-            Parody Song Generator
-          </h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-lg sm:text-2xl font-bold text-gray-900">
+              Parody Song Generator
+            </h1>
+            <div className="flex gap-2">
+              <button
+                onClick={handleExportSegments}
+                disabled={segments.length === 0}
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                title="Export segments as JSON"
+              >
+                Export
+              </button>
+              <label className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 cursor-pointer transition-colors">
+                Import
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleImportSegments}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
         </div>
       </header>
 

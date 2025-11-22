@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 
-// Declare YouTube IFrame Player API types
 declare global {
   interface Window {
     YT: any;
@@ -30,199 +29,131 @@ export default function VideoPlayer({
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const iframeIdRef = useRef<string>(`youtube-player-${Date.now()}`);
   const [isReady, setIsReady] = useState(false);
 
-  // Store refs for callbacks to avoid reinitializing
-  const onReadyRef = useRef(onReady);
+  // Keep current values in refs
+  const endTimeRef = useRef(endTime);
   const onEndedRef = useRef(onEnded);
-  const previousVideoIdRef = useRef<string>(videoId);
-  const previousStartTimeRef = useRef<number>(startTime);
 
-  // Keep refs updated
+  // Update refs when props change
   useEffect(() => {
-    onReadyRef.current = onReady;
+    endTimeRef.current = endTime;
     onEndedRef.current = onEnded;
-  }, [onReady, onEnded]);
+  }, [endTime, onEnded]);
 
-  // Initialize player ONCE
+  // Load YouTube API and initialize player
   useEffect(() => {
-    const loadYouTubeAPI = () => {
+    const loadAPI = async () => {
+      if (window.YT && window.YT.Player) return;
+
+      if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+        const script = document.createElement('script');
+        script.src = 'https://www.youtube.com/iframe_api';
+        document.head.appendChild(script);
+      }
+
       return new Promise<void>((resolve) => {
-        if (window.YT && window.YT.Player) {
-          resolve();
-          return;
-        }
-
-        if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
-          const tag = document.createElement('script');
-          tag.src = 'https://www.youtube.com/iframe_api';
-          const firstScriptTag = document.getElementsByTagName('script')[0];
-          firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
-        }
-
-        const checkAPI = () => {
-          if (window.YT && window.YT.Player) {
-            resolve();
-          } else {
-            setTimeout(checkAPI, 100);
-          }
+        const check = () => {
+          if (window.YT && window.YT.Player) resolve();
+          else setTimeout(check, 100);
         };
-        checkAPI();
+        check();
       });
     };
 
-    let isMounted = true;
+    const init = async () => {
+      await loadAPI();
 
-    const initPlayer = async () => {
-      if (playerRef.current) return;
+      if (!containerRef.current || playerRef.current) return;
 
-      const container = containerRef.current;
-      if (!container) return;
+      const div = document.createElement('div');
+      containerRef.current.appendChild(div);
 
-      try {
-        await loadYouTubeAPI();
-
-        if (!isMounted || !containerRef.current) return;
-
-        const playerId = iframeIdRef.current;
-        const placeholder = document.createElement('div');
-        placeholder.id = playerId;
-        container.appendChild(placeholder);
-
-        playerRef.current = new window.YT.Player(playerId, {
-          height: '400',
-          width: '100%',
-          videoId: videoId,
-          playerVars: {
-            start: Math.floor(startTime),
-            autoplay: autoplay ? 1 : 0,
-            controls: 1,
-            modestbranding: 1,
-            rel: 0,
-            showinfo: 0,
+      playerRef.current = new window.YT.Player(div, {
+        height: '400',
+        width: '100%',
+        videoId,
+        playerVars: {
+          start: Math.floor(startTime),
+          autoplay: autoplay ? 1 : 0,
+          controls: 1,
+        },
+        events: {
+          onReady: () => {
+            setIsReady(true);
+            if (onReady) onReady();
           },
-          events: {
-            onReady: (event: any) => {
-              if (!isMounted) return;
+          onStateChange: (event: any) => {
+            // Start monitoring when playing
+            if (event.data === window.YT.PlayerState.PLAYING) {
+              if (intervalRef.current) clearInterval(intervalRef.current);
 
-              setIsReady(true);
-              event.target.seekTo(startTime, true);
-              if (onReadyRef.current) onReadyRef.current();
+              intervalRef.current = setInterval(() => {
+                if (!playerRef.current) return;
 
-              if (autoplay) {
-                event.target.playVideo();
-              }
-            },
-            onStateChange: (event: any) => {
-              if (!isMounted) return;
-
-              // Monitor playback to stop at endTime
-              if (event.data === window.YT.PlayerState.PLAYING) {
-                if (intervalRef.current) {
-                  clearInterval(intervalRef.current);
+                const current = playerRef.current.getCurrentTime();
+                if (current >= endTimeRef.current) {
+                  playerRef.current.pauseVideo();
+                  if (intervalRef.current) clearInterval(intervalRef.current);
+                  if (onEndedRef.current) onEndedRef.current();
                 }
-
-                intervalRef.current = setInterval(() => {
-                  if (!isMounted) {
-                    if (intervalRef.current) {
-                      clearInterval(intervalRef.current);
-                    }
-                    return;
-                  }
-
-                  const currentTime = event.target.getCurrentTime();
-                  if (currentTime >= endTime) {
-                    event.target.pauseVideo();
-                    if (intervalRef.current) {
-                      clearInterval(intervalRef.current);
-                    }
-                    if (onEndedRef.current) onEndedRef.current();
-                  }
-                }, 100);
-              } else if (event.data === window.YT.PlayerState.PAUSED ||
-                         event.data === window.YT.PlayerState.ENDED) {
-                if (intervalRef.current) {
-                  clearInterval(intervalRef.current);
-                }
+              }, 100);
+            } else {
+              // Stop monitoring when not playing
+              if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
               }
-            },
+            }
           },
-        });
-
-        previousVideoIdRef.current = videoId;
-        previousStartTimeRef.current = startTime;
-      } catch (error) {
-        console.error('[VideoPlayer] Error initializing player:', error);
-      }
+        },
+      });
     };
 
-    initPlayer();
+    init();
 
     return () => {
-      isMounted = false;
-
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-
+      if (intervalRef.current) clearInterval(intervalRef.current);
       if (playerRef.current) {
         try {
-          if (typeof playerRef.current.destroy === 'function') {
-            playerRef.current.destroy();
-          }
-        } catch (error) {
-          console.warn('[VideoPlayer] Error destroying player:', error);
-        }
-        playerRef.current = null;
+          playerRef.current.destroy();
+        } catch (e) {}
       }
-
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
-      }
+      if (containerRef.current) containerRef.current.innerHTML = '';
     };
-  }, []); // ONLY INIT ONCE!
+  }, []);
 
-  // Handle videoId changes WITHOUT remounting
+  // Handle segment changes
   useEffect(() => {
     if (!isReady || !playerRef.current) return;
 
-    if (videoId !== previousVideoIdRef.current) {
-      console.log('[VideoPlayer] Loading new video:', videoId);
+    // Clear any running interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    // Stop current video
+    try {
+      playerRef.current.pauseVideo();
+    } catch (e) {}
+
+    // Load new segment
+    setTimeout(() => {
+      if (!playerRef.current) return;
+
       playerRef.current.loadVideoById({
-        videoId: videoId,
+        videoId,
         startSeconds: startTime,
       });
-      previousVideoIdRef.current = videoId;
-      previousStartTimeRef.current = startTime;
-    }
-  }, [videoId, startTime, isReady]);
 
-  // Handle time changes WITHOUT remounting
-  useEffect(() => {
-    if (!isReady || !playerRef.current) return;
-
-    // Check if we need to seek
-    if (videoId === previousVideoIdRef.current) {
-      const timeDiff = Math.abs(startTime - previousStartTimeRef.current);
-
-      if (timeDiff > 0.5) {
-        console.log('[VideoPlayer] Seeking to:', startTime);
-        try {
-          const currentTime = playerRef.current.getCurrentTime();
-
-          // Only seek if we're not already near the target time
-          if (Math.abs(currentTime - startTime) > 1) {
-            playerRef.current.seekTo(startTime, true);
-            previousStartTimeRef.current = startTime;
-          }
-        } catch (error) {
-          console.error('[VideoPlayer] Error seeking:', error);
-        }
+      if (autoplay) {
+        setTimeout(() => {
+          if (playerRef.current) playerRef.current.playVideo();
+        }, 300);
       }
-    }
-  }, [startTime, endTime, videoId, isReady]);
+    }, 100);
+  }, [videoId, startTime, endTime, autoplay, isReady]);
 
   return (
     <div
