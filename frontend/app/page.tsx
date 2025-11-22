@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ProjectSelector from "@/components/ProjectSelector";
 import SegmentList from "@/components/SegmentList";
@@ -10,7 +10,7 @@ import { Project, Segment } from "@/lib/types";
 import { loadProjects, saveProjects, createNewProject } from "@/lib/localStorage";
 import { validateAllSegments } from "@/lib/validation";
 
-export default function Home() {
+function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -47,6 +47,7 @@ export default function Home() {
       setCurrentProjectId(newProject.id);
       router.replace(`/?project=${newProject.id}`);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const currentProject = projects.find(p => p.id === currentProjectId);
@@ -55,6 +56,7 @@ export default function Home() {
     if (currentProject) {
       setSegments(currentProject.segments);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProjectId]);
 
   useEffect(() => {
@@ -67,6 +69,7 @@ export default function Home() {
       setProjects(updatedProjects);
       saveProjects(updatedProjects);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segments]);
 
   const handleProjectChange = (projectId: string) => {
@@ -301,5 +304,13 @@ export default function Home() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>}>
+      <HomeContent />
+    </Suspense>
   );
 }

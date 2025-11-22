@@ -192,7 +192,9 @@ export default function SegmentList({
               {segments.map((segment, index) => (
                 <div
                   key={segment.id}
-                  ref={(el) => (segmentRefs.current[index] = el)}
+                  ref={(el) => {
+                    segmentRefs.current[index] = el;
+                  }}
                 >
                   <SegmentCard
                     segment={segment}

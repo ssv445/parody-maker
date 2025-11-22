@@ -64,10 +64,11 @@ export default function VideoPlayer({
     const init = async () => {
       await loadAPI();
 
-      if (!containerRef.current || playerRef.current) return;
+      const container = containerRef.current;
+      if (!container || playerRef.current) return;
 
       const div = document.createElement('div');
-      containerRef.current.appendChild(div);
+      container.appendChild(div);
 
       playerRef.current = new window.YT.Player(div, {
         height: '400',
@@ -119,8 +120,10 @@ export default function VideoPlayer({
           playerRef.current.destroy();
         } catch (e) {}
       }
-      if (containerRef.current) containerRef.current.innerHTML = '';
+      const container = containerRef.current;
+      if (container) container.innerHTML = '';
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Handle segment changes

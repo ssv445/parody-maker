@@ -6,9 +6,9 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { videoId: string } }
+  { params }: { params: Promise<{ videoId: string }> }
 ) {
-  const { videoId } = params;
+  const { videoId } = await params;
 
   if (!videoId) {
     return NextResponse.json(

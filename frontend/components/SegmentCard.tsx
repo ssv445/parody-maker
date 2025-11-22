@@ -297,7 +297,7 @@ export default function SegmentCard({
           >
             <h3 className="font-semibold text-lg mb-2">Delete Segment?</h3>
             <p className="text-sm text-gray-600 mb-4">
-              "{songTitle}" will be permanently removed.
+              &quot;{songTitle}&quot; will be permanently removed.
             </p>
             <div className="flex gap-2">
               <button
