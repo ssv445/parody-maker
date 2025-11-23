@@ -10,6 +10,7 @@ interface PreviewPlayerProps {
   currentSegmentIndex: number;
   onSegmentChange: (index: number) => void;
   downloadButton?: React.ReactNode;
+  onImportExample?: () => void;
 }
 
 export default function PreviewPlayer({
@@ -17,6 +18,7 @@ export default function PreviewPlayer({
   currentSegmentIndex,
   onSegmentChange,
   downloadButton,
+  onImportExample,
 }: PreviewPlayerProps) {
   const [autoplayNext, setAutoplayNext] = useState(false);
   const [previewVideoId, setPreviewVideoId] = useState<string | null>(null);
@@ -79,7 +81,15 @@ export default function PreviewPlayer({
               d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          <p>Add segments to preview your parody song</p>
+          <p className="mb-4">Add segments to preview your mashup</p>
+          {onImportExample && (
+            <button
+              onClick={onImportExample}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              Import Example Mashup
+            </button>
+          )}
         </div>
       </div>
     );

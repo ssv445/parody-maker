@@ -90,7 +90,7 @@ router.post('/generate', async (req, res) => {
     // 5. Merge audio segments
     console.log('\n🔗 Merging audio segments...');
     const timestamp = Date.now();
-    const outputFileName = `parody_${timestamp}.m4a`;
+    const outputFileName = `mashup_${timestamp}.m4a`;
     const outputPath = path.join(OUTPUT_DIR, outputFileName);
 
     await mergeAudioFiles(

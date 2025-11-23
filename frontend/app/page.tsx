@@ -155,6 +155,65 @@ function HomeContent() {
     URL.revokeObjectURL(url);
   };
 
+  const processImportedData = (importedData: any[]) => {
+    if (!Array.isArray(importedData)) {
+      alert("Invalid JSON format. Expected an array of segments.");
+      return;
+    }
+
+    // Validate the structure
+    const isValid = importedData.every(item =>
+      item.url && item.startTime && item.endTime
+    );
+
+    if (!isValid) {
+      alert("Invalid segment format. Each segment must have url, startTime, and endTime.");
+      return;
+    }
+
+    // Convert to full segments
+    const { getYouTubeId, getYouTubeThumbnail } = require("@/lib/youtube");
+    const { fetchYouTubeTitle } = require("@/lib/youtube");
+
+    const newSegments: Segment[] = importedData.map((item: any) => {
+      const videoId = getYouTubeId(item.url) || "";
+      return {
+        id: crypto.randomUUID(),
+        songTitle: `Video ${videoId}`,
+        url: item.url,
+        videoId,
+        startTime: item.startTime,
+        endTime: item.endTime,
+        thumbnail: getYouTubeThumbnail(videoId),
+        verified: true,
+        validationErrors: [],
+      };
+    });
+
+    // Fetch titles asynchronously
+    newSegments.forEach(async (segment) => {
+      const title = await fetchYouTubeTitle(segment.videoId);
+      segment.songTitle = title;
+      setSegments([...newSegments]);
+    });
+
+    setSegments(newSegments);
+  };
+
+  const handleImportExample = async () => {
+    try {
+      const response = await fetch('/example_mashup.json');
+      if (!response.ok) {
+        throw new Error('Failed to fetch example mashup');
+      }
+      const importedData = await response.json();
+      processImportedData(importedData);
+    } catch (error) {
+      alert("Failed to load example mashup. Please try again.");
+      console.error("Import example error:", error);
+    }
+  };
+
   const handleImportSegments = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -164,50 +223,8 @@ function HomeContent() {
       try {
         const content = e.target?.result as string;
         const importedData = JSON.parse(content);
-
-        if (!Array.isArray(importedData)) {
-          alert("Invalid JSON format. Expected an array of segments.");
-          return;
-        }
-
-        // Validate the structure
-        const isValid = importedData.every(item =>
-          item.url && item.startTime && item.endTime
-        );
-
-        if (!isValid) {
-          alert("Invalid segment format. Each segment must have url, startTime, and endTime.");
-          return;
-        }
-
-        // Convert to full segments
-        const { getYouTubeId, getYouTubeThumbnail } = require("@/lib/youtube");
-        const { fetchYouTubeTitle } = require("@/lib/youtube");
-
-        const newSegments: Segment[] = importedData.map((item: any) => {
-          const videoId = getYouTubeId(item.url) || "";
-          return {
-            id: crypto.randomUUID(),
-            songTitle: `Video ${videoId}`,
-            url: item.url,
-            videoId,
-            startTime: item.startTime,
-            endTime: item.endTime,
-            thumbnail: getYouTubeThumbnail(videoId),
-            verified: true,
-            validationErrors: [],
-          };
-        });
-
-        // Fetch titles asynchronously
-        newSegments.forEach(async (segment) => {
-          const title = await fetchYouTubeTitle(segment.videoId);
-          segment.songTitle = title;
-          setSegments([...newSegments]);
-        });
-
-        setSegments(newSegments);
-        alert(`Imported ${newSegments.length} segments successfully!`);
+        processImportedData(importedData);
+        alert(`Imported ${importedData.length} segments successfully!`);
       } catch (error) {
         alert("Failed to parse JSON file. Please check the file format.");
         console.error("Import error:", error);
@@ -229,7 +246,7 @@ function HomeContent() {
         <div className="max-w-[1600px] mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between">
             <h1 className="text-lg sm:text-2xl font-bold text-gray-900">
-              Parody Song Generator
+              YouTube Mashup Generator
             </h1>
             <div className="flex gap-2">
               <button
@@ -275,6 +292,7 @@ function HomeContent() {
             segments={segments}
             currentSegmentIndex={currentSegmentIndex}
             onSegmentChange={setCurrentSegmentIndex}
+            onImportExample={handleImportExample}
             downloadButton={
               <GenerateButton
                 segments={segments}
