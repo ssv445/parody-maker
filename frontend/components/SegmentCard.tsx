@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Segment } from "@/lib/types";
 import { timeToSeconds, secondsToTime } from "@/lib/youtube";
+import TimeRangeSlider from "./TimeRangeSlider";
 
 interface SegmentCardProps {
   segment: Segment;
@@ -133,43 +134,46 @@ export default function SegmentCard({
             : hasErrors
             ? "border-red-300"
             : "border-gray-200"
-        } p-3 sm:p-4 cursor-pointer hover:shadow-sm w-full md:min-w-[380px] md:w-auto`}
+        } p-3 cursor-pointer hover:shadow-sm w-full md:min-w-[380px] md:w-auto`}
         onClick={onClick}
       >
-        {/* Header Row */}
-        <div className="flex items-start gap-1 sm:gap-2 mb-2 sm:mb-3">
-          {/* Left Arrow Button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onMoveUp?.();
-            }}
-            disabled={isFirst}
-            className="flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center hover:bg-gray-100 rounded disabled:opacity-30 disabled:cursor-not-allowed text-gray-600 text-sm sm:text-base"
-            title="Move left"
-          >
-            &lt;
-          </button>
+        {/* Header Row - Simplified */}
+        <div className="flex items-center gap-2 mb-3">
+          {/* Navigation Arrows */}
+          <div className="flex gap-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onMoveUp?.();
+              }}
+              disabled={isFirst}
+              className="w-6 h-6 flex items-center justify-center hover:bg-gray-100 rounded disabled:opacity-30 disabled:cursor-not-allowed text-gray-600"
+              title="Move left"
+            >
+              &lt;
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onMoveDown?.();
+              }}
+              disabled={isLast}
+              className="w-6 h-6 flex items-center justify-center hover:bg-gray-100 rounded disabled:opacity-30 disabled:cursor-not-allowed text-gray-600"
+              title="Move right"
+            >
+              &gt;
+            </button>
+          </div>
 
-          {/* Thumbnail & Title Column */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-              <img
-                src={segment.thumbnail}
-                alt={songTitle}
-                className="w-12 h-8 sm:w-16 sm:h-10 object-cover rounded flex-shrink-0"
-              />
-              <input
-                type="text"
-                value={songTitle}
-                onChange={(e) => handleSongTitleChange(e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                className="flex-1 text-[11px] sm:text-xs font-medium text-gray-900 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1 py-0.5"
-                placeholder="Song title..."
-              />
-            </div>
-            <div className="text-[10px] sm:text-xs text-gray-500">
-              Duration: {formatDuration(duration)}
+          {/* Thumbnail & Title */}
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <img
+              src={segment.thumbnail}
+              alt={songTitle}
+              className="w-14 h-10 object-cover rounded flex-shrink-0"
+            />
+            <div className="flex-1 min-w-0 text-sm font-medium text-gray-900 truncate">
+              {songTitle}
             </div>
           </div>
 
@@ -179,97 +183,22 @@ export default function SegmentCard({
               e.stopPropagation();
               setShowDeleteModal(true);
             }}
-            className="flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center hover:bg-red-100 rounded text-red-600 transition-colors text-lg sm:text-xl"
-            title="Delete segment"
+            className="w-6 h-6 flex items-center justify-center hover:bg-red-100 rounded text-red-600 text-xl flex-shrink-0"
+            title="Delete"
           >
             ×
           </button>
-
-          {/* Right Arrow Button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onMoveDown?.();
-            }}
-            disabled={isLast}
-            className="flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center hover:bg-gray-100 rounded disabled:opacity-30 disabled:cursor-not-allowed text-gray-600 text-sm sm:text-base"
-            title="Move right"
-          >
-            &gt;
-          </button>
         </div>
 
-        {/* Time Controls - Stacked on Mobile, Row on Desktop */}
-        <div className="flex flex-col md:flex-row gap-2 md:gap-3">
-          {/* Start Time */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-gray-600 font-medium w-10">Start</span>
-            <input
-              type="text"
-              value={localStartTime}
-              onChange={(e) => handleStartTimeChange(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              placeholder="00:00:00"
-              className="flex-1 md:w-20 px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-            />
-            <div className="flex gap-1">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  decrementTime('start');
-                }}
-                className="w-8 h-8 text-base bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded flex items-center justify-center"
-                title="-1s"
-              >
-                −
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  incrementTime('start');
-                }}
-                className="w-8 h-8 text-base bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded flex items-center justify-center"
-                title="+1s"
-              >
-                +
-              </button>
-            </div>
-          </div>
-
-          {/* End Time */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-gray-600 font-medium w-10">End</span>
-            <input
-              type="text"
-              value={localEndTime}
-              onChange={(e) => handleEndTimeChange(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              placeholder="00:01:00"
-              className="flex-1 md:w-20 px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-            />
-            <div className="flex gap-1">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  decrementTime('end');
-                }}
-                className="w-8 h-8 text-base bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded flex items-center justify-center"
-                title="-1s"
-              >
-                −
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  incrementTime('end');
-                }}
-                className="w-8 h-8 text-base bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded flex items-center justify-center"
-                title="+1s"
-              >
-                +
-              </button>
-            </div>
-          </div>
+        {/* Time Range Slider Component */}
+        <div className="p-4">
+          <TimeRangeSlider
+            startTime={localStartTime}
+            endTime={localEndTime}
+            maxDuration={300}
+            onStartTimeChange={handleStartTimeChange}
+            onEndTimeChange={handleEndTimeChange}
+          />
         </div>
 
         {/* Validation Errors */}
